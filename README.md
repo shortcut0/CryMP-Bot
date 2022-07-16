@@ -12,7 +12,7 @@ TODO:
 DONE:
   * [13.07.2022] Create the repo
   * [13.07.2022] Upload Includes and Core File
-  * [16.07.2022] Upload New Includes and Pathfiding System
+  * [16.07.2022] Upload New Includes and Pathfinding System
   
 ---------------------------
 -shortcut0 <3
