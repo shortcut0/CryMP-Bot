@@ -150,12 +150,12 @@ Pathfinding.InitNavmesh = function(self)
 	end
 	
 	---------------------
-	if (not BOT_NAVMEHS or table.count(BOT_NAVMEHS) < 1) then
+	if (not BOT_NAVMESH or table.count(BOT_NAVMESH) < 1) then
 		return true, PathFindLog("Empty Navmesh file", sMap, sRules)
 	end
 	
 	---------------------
-	PathFindLog("Vector Type is %s", vector.type(BOT_NAVMEHS[1]))
+	PathFindLog("Vector Type is %s", vector.type(BOT_NAVMESH[1]))
 	
 	---------------------
 	if (not Physics) then
@@ -176,7 +176,7 @@ Pathfinding.InitNavmesh = function(self)
 	local iConnections = 0
 	local iNodes = 0
 	local aValidatedMesh = {}
-	for i, pos in pairs(BOT_NAVMEHS) do
+	for i, pos in pairs(BOT_NAVMESH) do
 	
 		-- Script.SetTimer(i * 50, function()
 			-- Particle.SpawnEffect("explosions.flare.a", pos, g_Vectors.up, 0.1)
@@ -215,14 +215,14 @@ end
 
 Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance)
 	-----------------------
-	local vSource = BOT_NAVMEHS[iSource]
+	local vSource = BOT_NAVMESH[iSource]
 	
 	-----------------------
 	local fRayCheck = self.VALIDATION_FUNC
 	
 	-----------------------
 	local aConnections = {}
-	for iTarget, vTarget in pairs(BOT_NAVMEHS) do
+	for iTarget, vTarget in pairs(BOT_NAVMESH) do
 		if (iTarget ~= iSource) then
 			if ((vTarget.z - vSource.z < self.NODE_Z_MAX_DIST) and (vTarget.z - vSource.z > -self.NODE_Z_MAX_DIST)) then
 				local iDistance = vector.distance(vSource, vTarget)
@@ -438,9 +438,9 @@ Pathfinding.PaintNavmesh = function()
 end
 
 -------------------
--- Pathfinding.ExportNavmehs
+-- Pathfinding.ExportNavmesh
 
-Pathfinding.ExportNavmehs = function(self)
+Pathfinding.ExportNavmesh = function(self)
 
 	---------------------
 	PathFindLog("Exporting Navmesh")
@@ -450,9 +450,9 @@ Pathfinding.ExportNavmehs = function(self)
 	
 	---------------------
 	local sMapName = self.GetMapName()
-	local sFileName = string.format("ExportedNavmehs - %s", sMapName)
+	local sFileName = string.format("ExportedNavmesh - %s", sMapName)
 	local hFile = openfile(sFileName, "w+")
-	hFile:write("BOT_NAVMEHS = {\n")
+	hFile:write("BOT_NAVMESH = {\n")
 	
 	---------------------
 	local iCounter = 1
