@@ -13,6 +13,25 @@ arrayutils = {
 }
 
 ---------------------------
+-- table.lookupName (finish this)
+
+table.lookupName = function(t, val)
+
+	local fLoad = (load or loadstring)
+
+	if (not string.find(val, "([%.:]")) then
+		return _G[val] end
+
+	-- local idVar = "_G"
+	-- for sAddress in string.gmatch(val, "([^.:]*)") do
+		-- if (fLoad("return " .. idVar .. " == nil")) then
+			-- return idVar = idVar .. "." .. sAddress 
+		-- end 
+	-- end
+	return
+end
+
+---------------------------
 -- table.lookup
 
 table.lookup = function(t, val)
@@ -114,8 +133,7 @@ table.select = function(t, pred)
 	local aResult = {}
 	for k, v in pairs(t) do
 		if (pred(v)) then
-			aResult[k] = v
-		end
+			aResult[k] = v end
 	end
 	return aResult
 end
@@ -126,9 +144,8 @@ end
 table.iselect = function(t, pred)
 	local aResult = {}
 	for _, v in ipairs(t) do
-		if pred(v) then
-			table.insert(aResult, v)
-		end
+		if (pred(v)) then
+			table.insert(aResult, v) end
 	end
 	return aResult
 end
@@ -138,7 +155,7 @@ end
 
 table.one = function(t, pred)
 	for _, v in pairs(t) do
-		if (pred(v)) then
+		if (pred == nil or pred(v)) then
 			return v end end
 end
 
@@ -146,9 +163,14 @@ end
 -- table.count
 
 table.count = function(t, pred)
+
+	if (not table.isarray(t)) then
+		return 0
+	end
+
 	local iCount = 0
 	for _, v in pairs(t) do
-		if (pred(v)) then
+		if (pred == nil or pred(v)) then
 			iCount = iCount + 1
 		end
 	end
