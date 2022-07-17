@@ -39,6 +39,7 @@ Pathfinding.NODE_Z_MAX_DIST = 1
 Pathfinding.RECORD_NAVMESH = false
 Pathfinding.RECORDED_NAVMESH = {}
 Pathfinding.RECORD_INSERT_DIST = 2.5
+Pathfinding.RECORD_INSERT_DIST_Z = 0.35
 Pathfinding.RECORD_SKIP_FLYING = true
 
 -------------------
@@ -68,7 +69,7 @@ end
 Pathfinding.InitAStar = function()
 
 	---------------------
-	BotLog("Loading AStar Library")
+	PathFindLog("Loading AStar Library")
 	
 	---------------------
 	local sLibPath = "Bot\\Core\\Pathfinding"
@@ -79,7 +80,7 @@ Pathfinding.InitAStar = function()
 		return false end
 			
 	---------------------
-	BotLog("AStar Library loaded")
+	PathFindLog("AStar Library loaded")
 			
 	---------------------
 	return true
@@ -98,6 +99,7 @@ Pathfinding.InitCVars = function()
 		{ "test",       		"Pathfinding:Test(%1)",   				"Tests the Pathfinding System" },
 		{ "test_live",  		"Pathfinding:LivePathfindingTest(%1)", 	"Tests the Pathfinding System with real time tests" },
 		{ "record",  			"Pathfinding:Record()",   				"Toggles Realtime-Generating Navmesh" },
+		{ "record_all",  		"Pathfinding:SetRecordAll()",   		"Toggles Recording Positions of all Players" },
 		{ "record_clear", 		"Pathfinding:RecordCls()",				"Clears current temporary Navmesh" },
 		{ "record_paint", 		"Pathfinding:PaintNavmesh()",			"Paints the Currently Generated Navmesh on the Map" },
 		{ "record_unpaint", 	"Pathfinding:RemovePaintedNavmesh()",	"Removes the Painted Navmesh" },
@@ -405,29 +407,43 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 	local aPath = { vSource, vTarget }
 	
 	-----------------
-	if (self.VALIDATION_FUNC(vSource, vTarget, NULL_ENTITY, NULL_ENTITY) == true) then
+	if (self.VALIDATION_FUNC(vSource, vTarget, NULL_ENTITY, NULL_ENTITY) == true and self:NodesHaveSameElevation(vSource, vTarget)) then
 		PathFindLog("vStart and vTarget are connected!")
 		return aPath
 	end
 	
 	-----------------
-	local vClosest, iClosest = self:GetClosestPoint(vSource)
+	local vClosest, iClosest = self:GetClosestVisiblePoint(vSource)
+	if (not vClosest) then
+		vClosest, iClosest = self:GetClosestPoint(vSource) end
+		
+	-----------------
 	if (not vClosest) then
 		return { } end
 		
 	local aClosest = self.VALIDATED_NAVMESH[iClosest]
 	
 	-----------------
-	local vGoal, iGoal = self:GetClosestPoint(vTarget)
+	local vGoal, iGoal = self:GetClosestVisiblePoint(vTarget)
+	if (not vGoal) then
+		vGoal, iGoal = self:GetClosestPoint(vTarget) end
+		
+	-----------------
 	if (not vGoal) then
 		return { } end
 		
 	local aGoal = self.VALIDATED_NAVMESH[iGoal]
 	
 	-----------------
+	local iStartTime = os.clock()
+	
+	-----------------
 	aPath = astar.path(aClosest, aGoal, self.VALIDATED_NAVMESH, false, function(node, neighbor)
 		return node.links[neighbor.id] == true
 	end)
+	
+	----------------
+	PathFindLog("Generated path with %d Nodes in %0.4fs", table.count(aPath), (os.clock() - iStartTime))
 	
 	----------------
 	if (not isArray(aPath) or table.count(aPath) < 1) then
@@ -458,6 +474,21 @@ Pathfinding.Validate = function(aPath)
 end
 
 ---------------------------------------------
+-- Pathfinding.NodesHaveSameElevation
+
+Pathfinding.NodesHaveSameElevation = function(self, vSource, vTarget)
+
+	-----------
+	local iZDiff = (vSource.z - vTarget.z)
+	if (iZDiff > 1) then
+		return false elseif (iZDiff < -0.5) then
+			return false end
+			
+	-----------
+	return true
+end
+
+---------------------------------------------
 -- Pathfinding.CanSeeNode
 
 Pathfinding.CanSeeNode = function(vSource, vTarget, idSource, idTarget)
@@ -470,6 +501,27 @@ Pathfinding.CanSeeNode = function(vSource, vTarget, idSource, idTarget)
 	
 	----------------
 	return Pathfinding.VALIDATION_FUNC(vSource, vTarget, idSource, idTarget)
+end
+
+---------------------------------------------
+-- Pathfinding.GetClosestVisiblePoint
+
+Pathfinding.GetClosestVisiblePoint = function(self, vSource, pred)
+
+	local aClosest = { nil, nil, -1 }
+	
+	-----------------
+	for i, v in pairs(self.VALIDATED_NAVMESH) do
+		if (pred == nil or pred(vSource, v.pos) == true) then
+			local iDistance = vector.distance(v.pos, vSource)
+			if ((iDistance < aClosest[3] or aClosest[3] == -1) and self.CanSeeNode(vSource, v.pos)) then
+				aClosest = { v.pos, i, iDistance }
+			end
+		end
+	end
+	
+	----------------
+	return aClosest[1], aClosest[2]
 end
 
 ---------------------------------------------
@@ -635,6 +687,20 @@ Pathfinding.Record = function(self)
 end
 
 -------------------
+-- Pathfinding.SetRecordAll
+
+Pathfinding.SetRecordAll = function(self)
+	if (self.RECORDED_NAVMESH_ALL) then
+		self.RECORDED_NAVMESH_ALL = false
+	else
+		self.RECORDED_NAVMESH_ALL = true
+	end
+	
+	PathFindLog("All-Player Recording: %s", (self.RECORDED_NAVMESH_ALL and "Started" or "Paused"))
+	
+end
+
+-------------------
 -- Pathfinding.RecordCls
 
 Pathfinding.RecordCls = function(self)
@@ -659,19 +725,97 @@ Pathfinding.Update = function(self)
 		self.RECORDED_NAVMESH = {} end
 		
 	----------------
-	local vPos = vector.modify(g_localActor:GetPos(), "z", 0.1, true)
-	local bCanInsert = (not Pathfinding.IsNodesInRadius(vPos, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 1.5))
-	if (bCanInsert or self.FORCE_INSERT_NODE) then
-		if (not g_localActor.actor:IsFlying() or not self.RECORD_SKIP_FLYING) then
+	if (self.RECORDED_NAVMESH_ALL) then
+		for i, hPlayer in pairs(GetPlayers()) do
+			self:RecordPlayerMovement(hPlayer)
+		end
+	else
+		self:RecordPlayerMovement(g_localActor)
+	end
+end
+
+-------------------
+-- Pathfinding.Update
+
+Pathfinding.RecordPlayerMovement = function(self, aActor)
+	
+	----------------
+	if (not Bot:AliveCheck(aActor)) then
+		return end
+	
+	----------------
+	local bForceInsert = (aActor.id == g_localActorId and self.FORCE_INSERT_NODE)
+	
+	----------------
+	local vPos = vector.modify(aActor:GetPos(), "z", 0.1, true)
+	
+	----------------
+	local bCanInsert = false
+	if (not Pathfinding.IsNodesInRadius(vPos, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 1.5)) then
+		bCanInsert = true end
+		
+	----------------
+	if (not bCanInsert) then
+		bCanInsert = not self:CompareNodeZHeight(vPos, aActor.LAST_WORLD_POSITION)
+		bCanInsert = bCanInsert and not Pathfinding.IsNodesInRadius(vPos, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 0.15)
+	end
+	
+	----------------
+	if (bCanInsert or bForceInsert) then
+		if (not aActor.actor:IsFlying() or not self.RECORD_SKIP_FLYING) then
+			aActor.LAST_WORLD_POSITION = vPos
 			table.insert(self.RECORDED_NAVMESH, vPos)
-			PathFindLog("New Node %d Inserted: %s", table.count(self.RECORDED_NAVMESH), Vec2Str(vPos))
+			PathFindLog("%s$9 Added New Node $4%d$9 Pos: $1%s$9", aActor:GetName(), table.count(self.RECORDED_NAVMESH), Vec2Str(vPos))
 			if (self.AUTO_PAINT_NAVMESH) then
 				self:PaintNavmesh() end
 		end
 	end
 	
 	----------------
-	self.FORCE_INSERT_NODE = false
+	if (bForceInsert) then
+		self.FORCE_INSERT_NODE = false end
+	
+end
+
+-------------------
+-- Pathfinding.NodeHeightChanged
+
+Pathfinding.CompareNodeZHeight = function(self, vNode, vOldNode)
+
+	----------------
+	local bHeightChanged = self:CompareNodeElevation(vNode, self.RECORD_INSERT_DIST_Z, vOldNode)
+		
+	----------------
+	return bHeightChanged 
+end
+
+-------------------
+-- Pathfinding.CompareNodeElevation
+
+Pathfinding.CompareNodeElevation = function(self, vNode, iThreshold, vOldNode)
+
+	----------------
+	local iThreshold = (iThreshold or self.RECORD_INSERT_DIST_Z)
+
+	----------------
+	local iCurrent = table.count(self.RECORDED_NAVMESH)
+	if (iCurrent <= 1) then
+		return true end
+	
+	----------------
+	if (not vOldNode) then
+		vOldNode = self.RECORDED_NAVMESH[(iCurrent - 1)] end
+	
+	----------------
+	local iElevationDiff = (vOldNode.z - vNode.z)
+
+	----------------
+	if (iElevationDiff > iThreshold) then
+		return false elseif (iElevationDiff < -iThreshold) then
+			return false end
+		
+	----------------	
+	return true
 end
 
 -------------------
@@ -731,7 +875,7 @@ Pathfinding.ExportNavmesh = function(self, aNodes)
 	
 	---------------------
 	local sMapName, sMapRules = self.GetMapName()
-	local sDir = "Bot\\Core\\Pathfinding\\\NavigationData\\Maps"
+	local sDir = "Bot\\Core\\Pathfinding\\NavigationData\\Maps"
 	os.execute(string.format("if not exist \"%s\" md \"%s\"", sDir, sDir))
 	
 	local sFileName = string.format("%s\\%s\\%s\\Data.lua", sDir, sMapRules, sMapName)
