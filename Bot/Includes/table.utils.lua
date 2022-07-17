@@ -32,6 +32,17 @@ table.lookupName = function(t, val)
 end
 
 ---------------------------
+-- table.insertFirst
+
+table.insertFirst = function(t, add)
+	local tNew = { add }
+	for i, v in pairs(t) do
+		table.insert(tNew, v)
+	end
+	return tNew
+end
+
+---------------------------
 -- table.lookup
 
 table.lookup = function(t, val)
@@ -239,6 +250,29 @@ table.append = function(t1, t2)
 	for _, v in ipairs(t2) do
 		table.insert(t1, v)
 	end
+	return t1
+end
+
+---------------------------
+-- table.shuffle
+
+table.shuffle = function(t1)
+
+	local tNew = {}
+	local aIndexes = {}
+
+	for i, v in pairs(t1) do
+		table.insert(aIndexes, i) end
+	
+	for i = 1, table.count(t1) do
+	
+		local iNewIndex = getrandom(1, table.count(aIndexes))
+	
+		table.insert(tNew, t1[aIndexes[iNewIndex]]) 
+		table.remove(aIndexes, iNewIndex) 
+	end
+	
+	return tNew
 end
 
 ---------------------------
@@ -328,6 +362,7 @@ arrayutils.contains = table.contains
 arrayutils.deepCopy = table.deepCopy
 arrayutils.lookupRec = table.lookupRec
 arrayutils.deepClone = table.deepClone
+arrayutils.insertFirst = table.insertFirst
 arrayutils.removeValue = table.removeValue
 arrayutils.shallowClone = table.shallowClone
 arrayutils.arrayShiftOne = table.arrayShiftOne

@@ -41,6 +41,10 @@ System.ClearConsole()
 FINCH_VERSION = "1.0.0"
 
 -------------------------------
+if (loadstring == nil) then
+	loadstring = load end
+
+-------------------------------
 FinchLog = function(msg, ...)
 	local msg = msg
 	if (...) then
@@ -85,8 +89,8 @@ if (System.OldQuit == nil) then
 System.Quit = function(sCaller, ...)
 	FinchLog("System.Quit(" .. tostring((sCaller or "Unknown Caller")) .. ")")
 	
-	System.SetCVar("log_Verbosity -1")
-	System.SetCVar("log_fileVerbosity -1")	
+	System.SetCVar("log_Verbosity", "-1")
+	System.SetCVar("log_fileVerbosity", "-1")	
 	
 	return System.OldQuit(...)
 end;
@@ -115,8 +119,22 @@ FinchPower = {
 	------------------------------
 	ignoreIpCheck = true;
 	------------------------------
+	Reload = function(self)
+		
+		IS_RELOAD = true
+		System.ExecuteCommand('reloadBot')
+		
+	end,
+	------------------------------
 	Init = function(self)
 	
+		FinchLog("Initializing FinchPower")
+	
+		-------------------
+		-- Add Commands
+		if (not self:AddCommands()) then
+			return false end
+		
 		-------------------
 		-- Load Libraries
 		if (not self:LoadLibraries()) then
@@ -149,10 +167,48 @@ FinchPower = {
 		-------------------
 		self:MoveLogs('Bot Build%((%d+)%) Date%((%d+) (%w+) (%d+)%) Time%((%d+) (%d+) (%d+)%)%.log');
 		
+		-------------------
+		FinchLog("FinchPower Initialized")
+		
+		-------------------
+		IS_RELOAD = false
+		
+		-------------------
+		return true
+	end,
+	------------------------------
+	AddCommands = function(self)
+		---------------------
+		local sPrefix = "finchpower_"
+		local aCVars = {
+			{ "reload",   "FinchPower:Reload()",            "Reloads the FinchPower File" },
+			{ "init",     "FinchPower:Init(true)",          "Re-initializes the FinchPower" },
+			{ "initlibs", "FinchPower:LoadLibraries(true)", "Reloads the FinchPower Libraries" }
+		}
+		local iCVars = (table.count and table.count(aCVars) or #aCVars)
+		
+		---------------------
+		local addCommand = System.AddCCommand
+		
+		---------------------
+		for i, aInfo in pairs (aCVars) do
+			local sName = aInfo[1]
+			local sFunc = aInfo[2]
+			local sDesc = aInfo[3]
+			
+			addCommand(sPrefix .. sName, sFunc, (sDesc or "No Description"))
+		end
+		
+		---------------------
+		FinchLog("Registered %d New Console Commands", iCVars)
+		
+		---------------------
 		return true
 	end,
 	------------------------------
 	LoadFile = function(self, sFile)
+	
+		-----------------------
 		local bOk, sErr = pcall(loadfile, sFile)
 		if (not bOk) then
 			SetError("Failed to load File " .. sFile, (sErr or "<Unknown Cause>"))
@@ -164,41 +220,68 @@ FinchPower = {
 				return false, self:FinchError(true)
 			end
 		end
+		
+		-----------------------
 		FinchLog("FILE OK -> " .. sFile)
+		
+		-----------------------
 		return true, sErr
 	end;
 	------------------------------
 	LoadLibraries = function(self)
+			
+		-----------------------
+		FinchLog("Loading Libraries")
+		
+		-----------------------
 		local sLibPath = "Bot\\Includes\\"
 	
+		-----------------------
 		local bOk, hLib = self:LoadFile(sLibPath .. "\\ini.utils.lua")
 		if (not bOk) then
 			return false end
 			
+		-----------------------
+		bOk, hLib = self:LoadFile(sLibPath .. "\\lua.utils.lua")
+		if (not bOk) then
+			return false end
+			
+		-----------------------
+		bOk, hLib = self:LoadFile(sLibPath .. "\\vector.utils.lua")
+		if (not bOk) then
+			return false end
+			
+		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\math.utils.lua")
 		if (not bOk) then
 			return false end
 			
+		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\string.utils.lua")
 		if (not bOk) then
 			return false end
 			
+		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\table.utils.lua")
 		if (not bOk) then
 			return false end
 			
+		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\string.shred.lua")
 		if (not bOk) then
 			return false end
 			
+		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\simplehash.lua")
 		if (not bOk) then
 			return false end
 			
+		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\md5.lua")
 		if (not bOk) then
 			return false end
 			
+		-----------------------
 		FinchLog("All Libraries loaded")
 			
 		return true
@@ -206,8 +289,10 @@ FinchPower = {
 	------------------------------
 	LoadConfigFile = function(self)
 	
+		-----------------------
 		local sConfigPath = "Bot\\Config.lua";
 		
+		-----------------------
 		local bOk, hLib = self:LoadFile(sConfigPath)
 		if (not bOk) then
 			return false end
@@ -226,12 +311,23 @@ FinchPower = {
 			self.RECONNECT_TRIES = Config.ZombieQuit end	
 
 		-----------------------
-		if (Config.CurrentServer) then
-			local aServer = Config.ServerList[Config.CurrentServer]
+		local sServer = Config.CurrentServer
+		if (sServer) then
+			local aServer = Config.ServerList[sServer]
 			if (aServer) then
 				self.CONNECT_IP = aServer.I_PEE
 				self.CONNECT_PORT = aServer.PORT
 				self.CONNECT_PASSWORD = aServer.PASSWORT
+			else
+				local iIPA, iIPB, iIPC, iIPD, iPort, sPass = string.match(sServer, "(%d+)%.(%d+)%.(%d+)%.(%d+)%s-:?%s-(%d+)%s-:?%s-(.*)") -- IP:PORT:PASSWORD
+				if (iIPA and iIPB and iIPC and iIPD and iPort) then
+					self.CONNECT_IP = string.format("%d.%d.%d.%d", iIPA, iIPB, iIPC, iIPD)
+					self.CONNECT_PORT = string.format("%d", iPort)
+					self.CONNECT_PASSWORD = sPass
+					
+					-----------------------
+					FinchLog("Parsed Server Info (IP: %s, Port: %s, Pass: %s) from String %s", self.CONNECT_IP, self.CONNECT_PORT, (self.CONNECT_PASSWORD or ""), sServer)
+				end
 			end
 		end	
 		
@@ -267,6 +363,10 @@ FinchPower = {
 		end
 	
 		local sIniPath = string.gettempdir() .. "\\..\\CryMP-Bot-Launcher\\PresetActive\\Current.ini"
+		if (not fileexists(sIniPath)) then
+			return true, FinchLog("Preset File not found: %s", sIniPath)
+		end
+		
 		FinchLog("Loading Launcher Preset INI: %s", sIniPath)
 		local aKeys = {
 			["_AutoReconnect_"] 	= { "FinchPower.RECONNECT_IF_KICKED",			true }, 
@@ -353,7 +453,7 @@ FinchPower = {
 			["_MaxFPS_"]				= { "Config.BotMaxFPS",			false },
 			--------------------------------------------------------------------
 			["_AIGruntMode_"]			= { "Config.AIGruntMode",		false },
-			["_AIGruntCJ_"]				= { "Config.AIGruntMode",		false },
+			["_AIGruntCJ_"]				= { "Config.AIGruntModeCJ",		false },
 			["_AIGruntFarPoint_"]		= { "Config.FollowGruntUseFurthestPoint",	false },
 			["_AIGruntStuckTime_"]		= { "Config.FollowGruntStuckTimer",			3000 },
 			["_AIGruntStuckDist_"]		= { function(v)Config.FollowGruntStuckDist = v/1000 end,			1 },
@@ -371,9 +471,10 @@ FinchPower = {
 		for iniKey, aData in pairs(aKeys) do
 			local sKey = aData[1]
 			local sDef = aData[2]
+			local bOnlyIfNil = aData[3]
 			
 			local sIni = iniutils.iniread(sIniPath, "Config", iniKey, sDef)
-			FinchLog(tostring(iniKey) .. " == " .. tostring(sIni))
+			-- FinchLog(tostring(iniKey) .. " == " .. tostring(sIni))
 			if (not sIni) then
 				sIni = "" end
 			
@@ -390,8 +491,13 @@ FinchPower = {
 				if (sIni == nil or type(sIni) == "string") then
 					sLoad = "\"" .. tostring(sIni) .. "\"" end
 				
-				loadstring(string.format("%s = %s", sKey, sLoad))()
-				iKeysRead = iKeysRead + 1
+				if (not bOnlyIfNil or loadstring(string.format("return %s == nil", sKey))() == true) then
+					loadstring(string.format("%s = %s", sKey, sLoad))()
+					iKeysRead = iKeysRead + 1
+					FinchLog(tostring(sKey) .. " == " .. tostring(sLoad))
+				else
+					FinchLog("Skipped Key %s (%s)", sKey, sLoad)
+				end
 			end
 		end
 		
@@ -503,7 +609,7 @@ FinchPower = {
 			------------------------------------
 			OnRevive = function(self, channelId, player, isBot) -- when received phys profile "alive" from server
 				if(Bot and Bot.OnRevive)then
-					self:SafeCall(Bot.OnRevive, player, isBot, channelId);
+					self:SafeCall(Bot.OnRevive, Bot, player, isBot, channelId);
 				end;
 			end;
 			------------------------------------
@@ -581,7 +687,7 @@ FinchPower = {
 			------------------------------------
 			SafeCall = function(self, f, ...)
 				if(f ~= nil)then
-					local functionName = "Unknown"; --(self:GetFunctionName(f) or "Unknown") or "Unknown";
+					local functionName = table.lookupRec(_G, f); -- Lookup in _G, not optimal !!
 					local s, e = pcall(f, ...);
 					if(not s)then
 						SetError("SafeCall failed to execute function " .. tostring(functionName), (e or "Possible Script Error"));
@@ -716,6 +822,13 @@ FinchPower = {
 		end
 		
 		---------------------
+		local bIsInvalidPassword = self:IsInvalidPassword(reason)
+		if (bIsInvalidPassword) then
+			bQuit = true
+			FinchLog("Not Reconnecting to Server (Invalid Server Password)")
+		end
+		
+		---------------------
 		local bRetiresExceeded = RECONNECT_TRIES > self.RECONNECT_TRIES
 		if (bRetiresExceeded) then
 			bQuit = true
@@ -736,6 +849,10 @@ FinchPower = {
 	------------------------------
 	IsServerProbablyOffline = function(self, r)
 		return (string.match(r, "Connection attempt to ((%d+)%.(%d+)%.(%d+)%.(%d+):(%d+)) failed"))
+	end;
+	------------------------------
+	IsInvalidPassword = function(self, r)
+		return (string.match(r, "Authentication password is wrong"))
 	end;
 	------------------------------
 	IsBlacklistedReason = function(self, r)
@@ -775,10 +892,10 @@ FinchPower = {
 		FinchLog("Patching Game Rules");
 			
 		---------------------
-		if(player.OnEnteredServer)then 
-			g_gameRules.server:RequestSpectatorTarget(g_localActor.id, 111); -- to idenfity bots
-			player:OnEnteredServer();
-		end;
+		if (player and player.OnEnteredServer) then 
+			g_gameRules.server:RequestSpectatorTarget(g_localActor.id, 111) -- to idenfity bots
+			player:OnEnteredServer()
+		end
 			
 		---------------------
 		self:PatchGameRules()
@@ -890,7 +1007,7 @@ FinchPower = {
 			self:FinchRemoveVBS();
 		end;
 		self:FinchLogError(star);
-		return quit and System.Quit("LUA Error") or ((Config and Config.UseErrorBox) and self:FinchLoadFile());
+		-- return (not IS_RELOAD and quit) and System.Quit("LUA Error") or ((Config and Config.UseErrorBox) and self:FinchLoadFile());
 	end;
 	------------------------------
 	FinchLogError = function(self, star)
@@ -1081,7 +1198,7 @@ FinchPower = {
 
 
 -------------------------
-local function _Startup()
+function _Startup()
 	local bOk, sErr = pcall(FinchPower.Init, FinchPower)
 	if (not bOk) then
 		SetError("Failed to initialize FinchPower", sErr)
@@ -1091,9 +1208,6 @@ end
 
 -------------------------
 _Startup()
-
--------------------------
-System.AddCCommand("finchpower_reload", "_Startup()", "Initialize the FinchPower")
 
 -------------------------
 System.SetCVar("log_verbosity", "4");

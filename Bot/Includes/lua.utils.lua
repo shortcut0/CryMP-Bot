@@ -83,7 +83,7 @@ luautils.random = function(min, max, floor)
 end
 
 -------------------
-random = luautils.random
+getrandom = luautils.random
 isArray = luautils.isArray
 isString = luautils.isString
 isNumber = luautils.isNumber

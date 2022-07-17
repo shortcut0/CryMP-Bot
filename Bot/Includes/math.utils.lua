@@ -39,6 +39,13 @@ math.div = function(i, d)
 end
 
 ---------------------------
+-- math.round
+
+math.round = function(i)
+	return (i >= 0 and math.floor(i + 0.5) or math.ceil(i - 0.5))
+end
+
+---------------------------
 -- math.fits
 
 math.fits = function(target, number)

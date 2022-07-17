@@ -16,7 +16,7 @@ Config = {
 	ServerList = { };
 	
 	-- Name of the current server
-	CurrentServer = "127.0.0.1:64087";
+	CurrentServer = "127.0.0.1:66666:2020";
 	
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers
@@ -193,7 +193,7 @@ Config = {
 		['sys_flash'] = 1; -- no flash files
 		['ai_logconsoleverbosity'] = 4; -- no flash files
 		['ai_logfileverbosity'] = 4; -- no flash files
-		['sys_maxFPS'] = 24.0; -- maximum allowed FPS, 60 for normal firerate
+		['sys_maxFPS'] = 60.0; -- maximum allowed FPS, 60 for normal firerate
 	};
 	
 	----------------------------------------------

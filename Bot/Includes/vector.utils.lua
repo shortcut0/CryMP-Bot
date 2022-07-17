@@ -85,6 +85,42 @@ vector.type = function(v)
 end
 
 ---------------------------
+-- vector.isnull
+
+vector.isnull = function(v)
+
+	------------------
+	if (not vector.isvector(v)) then
+		return true end
+
+	------------------
+	return (v.x == 0 and v.y == 0 and v.z == 0)
+end
+
+---------------------------
+-- vector.validate
+
+vector.validate = function(v)
+
+	------------------
+	if (vector.isvector(v)) then
+		return v end
+
+	------------------
+	local iX = tonumber(v.x) or 0
+	local iY = tonumber(v.y) or 0
+	local iZ = tonumber(v.z) or 0
+	
+	local vNew = {
+		x = iX,
+		y = iY,
+		z = iZ
+	}
+	
+	return vNew
+end
+
+---------------------------
 -- vector.add
 
 vector.add = function(v1, v2)
@@ -273,6 +309,27 @@ vector.distance = function(v1, v2)
 	
 	------------------
 	return math.sqrt(iX * iX + iY * iY + iZ * iZ)
+end
+
+---------------------------
+-- vector.distance2d
+
+vector.distance2d = function(v1, v2)
+
+	------------------
+	if (not vector.isvector(v1)) then
+		return 0 end
+
+	------------------
+	if (not vector.isvector(v2)) then
+		return 0 end
+	
+	------------------
+	local iX = (v1.x - v2.x)
+	local iY = (v1.y - v2.y)
+	
+	------------------
+	return math.sqrt(iX * iX + iY * iY)
 end
 
 
