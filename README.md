@@ -14,6 +14,7 @@ DONE:
   * [13.07.2022] Upload Includes and Core File
   * [16.07.2022] Upload New Includes and Pathfinding System
   * [17.07.2022] Upload New Navmesh and Improved Pathfinding System
+  * [17.07.2022] Created New Navigation System
   
 ---------------------------
 -shortcut0 <3
