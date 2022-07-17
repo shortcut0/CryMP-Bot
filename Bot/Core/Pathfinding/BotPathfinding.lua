@@ -1,7 +1,7 @@
 --=====================================================
 -- CopyRight (c) R 2022-2203
 --
--- Random (sometimes) useful table utils for lua
+-- Pathfinding utilities for the CryMP bot project
 --
 --=====================================================
 
@@ -11,6 +11,12 @@ PathFindLog = function(msg, ...)
 		sFmt = string.format(sFmt, ...) end
 		
 	System.LogAlways(sFmt)
+end
+
+-------------------
+local aGenNavmesh
+if (Pathfinding) then
+	aGenNavmesh = Pathfinding.RECORDED_NAVMESH
 end
 
 -------------------
@@ -30,6 +36,12 @@ Pathfinding.NODE_MAX_DIST_PANIC = 25
 Pathfinding.NODE_Z_MAX_DIST = 1
 
 -------------------
+Pathfinding.RECORD_NAVMESH = false
+Pathfinding.RECORDED_NAVMESH = {}
+Pathfinding.RECORD_INSERT_DIST = 2.5
+Pathfinding.RECORD_SKIP_FLYING = true
+
+-------------------
 -- Pathfinding.Init
 
 Pathfinding.Init = function(self, bReload)
@@ -38,15 +50,15 @@ Pathfinding.Init = function(self, bReload)
 	PathFindLog("Pathfinding.Init()")
 	
 	---------------------
-	if (not self.InitAStar()) then
+	if (not self.InitAStar(bReload)) then
 		return false end
 	
 	---------------------
-	if (not self.InitCVars()) then
+	if (not self.InitCVars(bReload)) then
 		return false end
 	
 	---------------------
-	if (not self:InitNavmesh()) then
+	if (not self:InitNavmesh(bReload)) then
 		return false end
 end
 
@@ -81,10 +93,19 @@ Pathfinding.InitCVars = function()
 	---------------------
 	local sPrefix = "pathfinding_"
 	local aCVars = {
-		{ "init",       "Pathfinding:Init(true)", "Re-initializes the Bot Pathfinding System" },
-		{ "reloadfile", "Bot:LoadPathfinding()",  "Reloads the Pathfinding file" },
-		{ "test",       "Pathfinding:Test(%1)",   "Tests the Pathfinding System" },
-		{ "test_live",  "Pathfinding:LivePathfindingTest(%1)", "Tests the Pathfinding System with real time tests" }
+		{ "init",       		"Pathfinding:Init(true)", 				"Re-initializes the Bot Pathfinding System" },
+		{ "reloadfile", 		"Bot:LoadPathfinding()",  				"Reloads the Pathfinding file" },
+		{ "test",       		"Pathfinding:Test(%1)",   				"Tests the Pathfinding System" },
+		{ "test_live",  		"Pathfinding:LivePathfindingTest(%1)", 	"Tests the Pathfinding System with real time tests" },
+		{ "record",  			"Pathfinding:Record()",   				"Toggles Realtime-Generating Navmesh" },
+		{ "record_clear", 		"Pathfinding:RecordCls()",				"Clears current temporary Navmesh" },
+		{ "record_paint", 		"Pathfinding:PaintNavmesh()",			"Paints the Currently Generated Navmesh on the Map" },
+		{ "record_unpaint", 	"Pathfinding:RemovePaintedNavmesh()",	"Removes the Painted Navmesh" },
+		{ "record_livepaint", 	"Pathfinding:SetAutoPaint()",			"Toggles Real-time Painting of Navmesh" },
+		{ "record_import", 		"Pathfinding:MergeNavmesh()",			"Merges already Generated Navmesh you newly Generated one" },
+		{ "record_insert", 		"Pathfinding:InsertNode()",				"Insers a New node at your current position" },
+		
+		{ "record_export", 		"Pathfinding:ExportNavmesh(Pathfinding.RECORDED_NAVMESH)", "Exports the newly generated Navmesh" },
 	}
 	local iCVars = table.count(aCVars)
 	
@@ -111,7 +132,7 @@ end
 -------------------
 -- Pathfinding.InitNavmesh
 
-Pathfinding.InitNavmesh = function(self)
+Pathfinding.InitNavmesh = function(self, bReload)
 	
 	PathFindLog("Pathfinding.InitNavmesh()")
 	
@@ -119,6 +140,9 @@ Pathfinding.InitNavmesh = function(self)
 	if (self.NAVMESH_VALIDATED) then
 		if (not bReload) then
 			return true end end
+		
+	---------------------
+	BOT_NAVMESH = nil
 		
 	---------------------
 	local sRules, sMap = string.match(string.lower(Bot.GetLevelName()), "multiplayer/(.*)/(.*)")
@@ -241,6 +265,13 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance)
 end
 
 ---------------------------------------------
+-- Pathfinding.IsOperational
+
+Pathfinding.IsOperational = function()
+	return (Pathfinding.NAVMESH_VALIDATED == true)
+end
+
+---------------------------------------------
 -- Pathfinding.OnTick
 
 Pathfinding.OnTick = function(self)
@@ -329,7 +360,9 @@ Pathfinding.Test = function(self, idClassOrEntity)
 	if (isArray(idClassOrEntity)) then
 		vEnd = idClassOrEntity:GetPos()
 	else
-		vEnd = random(System.GetEntitiesByClass(idClassOrEntity or "SpawnPoint")):GetPos()
+		vEnd = System.GetEntitiesByClass(idClassOrEntity or "SpawnPoint")
+		vEnd = getrandom(vEnd)
+		vEnd = vEnd:GetPos()
 	end
 	
 	---------------------
@@ -349,12 +382,16 @@ Pathfinding.Test = function(self, idClassOrEntity)
 	
 	---------------------
 	self.TESTGEN_PATH = aPath
-	for i, node in pairs(aPath) do
-		-- Script.SetTimer(i * 500, function()
-			-- PathFindLog("Node %d pos %s", i, Vec2Str(node))
-			-- Particle.SpawnEffect("explosions.flare.a", node, g_Vectors.up, 0.1)
-			-- g_localActor:SetPos(node)
-		-- end)
+	
+	---------------------
+	if (not self.TESTFIND_ENTITY) then
+		for i, node in pairs(aPath) do
+			 Script.SetTimer(i * 500, function()
+				 PathFindLog("Node %d pos %s", i, Vec2Str(node))
+				Particle.SpawnEffect("explosions.flare.a", node, g_Vectors.up, 0.1)
+				g_localActor:SetPos(node)
+			end)
+		end
 	end
 	---------------------
 end
@@ -397,8 +434,42 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 		return {} end
 	
 	----------------
-	return aPath
+	table.insertFirst(aPath, vClosest)
+	table.insert(aPath, aGoal)
 	
+	----------------
+	return self.Validate(aPath)
+	
+end
+
+---------------------------------------------
+-- Pathfinding.Validate
+
+Pathfinding.Validate = function(aPath)
+	local aValidated = {}
+	
+	----------------
+	for i, node in pairs(aPath) do
+		aValidated[i] = vector.validate(node)
+	end
+	
+	----------------
+	return aValidated
+end
+
+---------------------------------------------
+-- Pathfinding.CanSeeNode
+
+Pathfinding.CanSeeNode = function(vSource, vTarget, idSource, idTarget)
+
+	if (not idSource) then
+		idSource = NULL_ENTITY end
+		
+	if (not idTarget) then
+		idTarget = NULL_ENTITY end
+	
+	----------------
+	return Pathfinding.VALIDATION_FUNC(vSource, vTarget, idSource, idTarget)
 end
 
 ---------------------------------------------
@@ -428,19 +499,229 @@ end
 
 Pathfinding.GetMapName = function()
 	local sRules, sMap = string.match(string.lower(Bot.GetLevelName()), "multiplayer/(.*)/(.*)")
-	return sMap
+	return sMap, sRules
 end
 
 -------------------
--- Pathfinding.PainNavmesh
+-- Pathfinding.PaintNavmesh
 
-Pathfinding.PaintNavmesh = function()
+Pathfinding.PaintNavmesh = function(self)
+	if (not self.RECORD_NAVMESH) then
+		return false end
+		
+	----------------
+	if (not self.RECORDED_NAVMESH) then
+		return false end
+		
+	----------------
+	-- self:RemovePaintedNavmesh()
+		
+	----------------
+	for i, node in pairs(self.RECORDED_NAVMESH) do
+		local sName = string.format("BotNavi_Point%d_Painted", i)
+		if (not System.GetEntityByName(sName)) then
+			local idEntity = System.SpawnEntity({
+				name = sName,
+				class = "TagPoint",
+				position = node,
+				orientation = g_Vectors.up
+			})
+			
+			idEntity:LoadObject(0, "Editor/Objects/ai_hide_point.cgf")
+			idEntity:DrawSlot(0, 1)
+		end
+	end
+	
+	----------------
+	PathFindLog("Painted %d Navmesh Nodes", table.count(self.RECORDED_NAVMESH))
+end
+
+-------------------
+-- Pathfinding.RemovePaintedNavmesh
+
+Pathfinding.RemovePaintedNavmesh = function(self)
+		
+	----------------
+	local iCounter = 0
+	for i, idEntity in pairs(System.GetEntities()) do
+		if (string.match(idEntity:GetName(), "BotNavi_Point(%d+)_Painted")) then
+			System.RemoveEntity(idEntity.id)
+			iCounter = iCounter + 1
+		end
+	end
+	
+	----------------
+	PathFindLog("Deleted %d Navmesh Nodes", iCounter)
+end
+
+-------------------
+-- Pathfinding.SetAutoPaint
+
+Pathfinding.SetAutoPaint = function(self)
+
+	if (self.AUTO_PAINT_NAVMESH) then
+		self.AUTO_PAINT_NAVMESH = false
+		self:RemovePaintedNavmesh()
+	else
+		self.AUTO_PAINT_NAVMESH = true
+		self:PaintNavmesh()
+	end
+	
+	----------------
+	PathFindLog("Realtime Navmesh Painting: %s", (self.AUTO_PAINT_NAVMESH and "Started" or "Stopped"))
+end
+
+-------------------
+-- Pathfinding.InsertNode
+
+Pathfinding.InsertNode = function(self)
+	
+	----------------
+	if (not self.RECORDED_NAVMESH) then
+		return false end
+		
+	----------------
+	if (not self.RECORDED_NAVMESH) then
+		self.RECORDED_NAVMESH = {} end
+	
+	----------------
+	self.FORCE_INSERT_NODE = true
+	
+	----------------
+	PathFindLog("Forcefully inserted new node at index %d", (table.count(self.RECORDED_NAVMESH) + 1))
+end
+
+-------------------
+-- Pathfinding.MergeNavmesh
+
+Pathfinding.MergeNavmesh = function(self)
+	
+	----------------
+	if (not self.RECORDED_NAVMESH) then
+		self.RECORDED_NAVMESH = {} end
+	
+	----------------
+	if (not BOT_NAVMESH) then
+		return false end
+	
+	----------------
+	local iMerged = 0
+	for i, node in pairs(BOT_NAVMESH) do
+		if (not Pathfinding.IsNodesInRadius(node, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH)) then
+			table.insert(self.RECORDED_NAVMESH, node)
+			iMerged = iMerged + 1
+		end
+	end
+	
+	----------------
+	PathFindLog("Added %d new Nodes to Navmesh", iMerged)
+end
+
+-------------------
+-- Pathfinding.Record
+
+Pathfinding.Record = function(self)
+	if (self.RECORD_NAVMESH) then
+		self.RECORD_NAVMESH = false
+	else
+		self.RECORD_NAVMESH = true
+	end
+	
+	----------------
+	if (not self.RECORDED_NAVMESH) then
+		self.RECORDED_NAVMESH = {} end
+	
+	PathFindLog("Navmesh Recording: %s", (self.RECORD_NAVMESH and "Started" or "Paused"))
+end
+
+-------------------
+-- Pathfinding.RecordCls
+
+Pathfinding.RecordCls = function(self)
+
+	----------------
+	local iNodes = table.count(self.RECORDED_NAVMESH or {})
+	PathFindLog("Flushed %d Nodes", iNodes)
+	
+	----------------
+	self.RECORDED_NAVMESH = {}
+end
+
+-------------------
+-- Pathfinding.Update
+
+Pathfinding.Update = function(self)
+	if (not self.RECORD_NAVMESH) then
+		return false end
+		
+	----------------
+	if (not self.RECORDED_NAVMESH) then
+		self.RECORDED_NAVMESH = {} end
+		
+	----------------
+	local vPos = vector.modify(g_localActor:GetPos(), "z", 0.1, true)
+	local bCanInsert = (not Pathfinding.IsNodesInRadius(vPos, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 1.5))
+	if (bCanInsert or self.FORCE_INSERT_NODE) then
+		if (not g_localActor.actor:IsFlying() or not self.RECORD_SKIP_FLYING) then
+			table.insert(self.RECORDED_NAVMESH, vPos)
+			PathFindLog("New Node %d Inserted: %s", table.count(self.RECORDED_NAVMESH), Vec2Str(vPos))
+			if (self.AUTO_PAINT_NAVMESH) then
+				self:PaintNavmesh() end
+		end
+	end
+	
+	----------------
+	self.FORCE_INSERT_NODE = false
+end
+
+-------------------
+-- Pathfinding.IsNodesInRadius
+
+Pathfinding.IsNodesInRadius = function(vSource, iDistance, aNodes, iZ)
+
+	----------------
+	for i, node in pairs(aNodes) do
+		if (vector.distance(node, vSource) < iDistance and (not iZ or vSource.z - node.z < iZ)) then
+			return true end end
+			
+	----------------
+	return false
+end
+
+-------------------
+-- Pathfinding.IsNodesInRadius2D
+
+Pathfinding.IsNodesInRadius2D = function(vSource, iDistance, aNodes)
+
+	----------------
+	for i, node in pairs(aNodes) do
+		if (vector.distance2d(node, vSource) < iDistance) then
+			return true end end
+			
+	----------------
+	return false
+end
+
+-------------------
+-- Pathfinding.GetNodeInRadius
+
+Pathfinding.GetNodesInRadius = function(vSource, iDistance, aNodes)
+
+	local aInRadius = {}
+
+	----------------
+	for i, node in pairs(aNodes) do
+		if (vector.distance(node, vSource) < iDistance) then
+			table.insert(aInRadius, node) end end
+			
+	----------------
+	return aInRadius
 end
 
 -------------------
 -- Pathfinding.ExportNavmesh
 
-Pathfinding.ExportNavmesh = function(self)
+Pathfinding.ExportNavmesh = function(self, aNodes)
 
 	---------------------
 	PathFindLog("Exporting Navmesh")
@@ -449,30 +730,56 @@ Pathfinding.ExportNavmesh = function(self)
 	local aEntities = System.GetEntitiesByClass ("TagPoint") or {}
 	
 	---------------------
-	local sMapName = self.GetMapName()
-	local sFileName = string.format("ExportedNavmesh - %s", sMapName)
-	local hFile = openfile(sFileName, "w+")
+	local sMapName, sMapRules = self.GetMapName()
+	local sDir = "Bot\\Core\\Pathfinding\\\NavigationData\\Maps"
+	os.execute(string.format("if not exist \"%s\" md \"%s\"", sDir, sDir))
+	
+	local sFileName = string.format("%s\\%s\\%s\\Data.lua", sDir, sMapRules, sMapName)
+	local hFile = io.open(sFileName, "w+") --string.openfile(sFileName, "w+")
+	hFile:write("-------------------\n")
+	hFile:write("--Bot-AutoGenerated\n")
+	hFile:write("\n")
+	hFile:write("-----------------\n")
 	hFile:write("BOT_NAVMESH = {\n")
 	
 	---------------------
 	local iCounter = 1
-	for i, entity in pairs(aEntities) do
-		local sName = entity:GetName()
-		if (string.match(entity:GetName(), "BotNavi_Point%d")) then
-			PathFindLog(" -> New Point %s", entity:GetName())
-			
-			local aPos = entity:GetPos()
-			hFile:write(string.format("\t[%d] = { x = %0.4f, y = %0.4f, z = %0.4f }\n", iCounter, aPos.x, aPos.y, aPos.z))
-			
+	
+	if (aNodes) then
+		for i, node in pairs(aNodes) do
+			hFile:write(string.format("\t[%d] = { x = %0.4f, y = %0.4f, z = %0.4f },\n", iCounter, node.x, node.y, node.z))
 			iCounter = iCounter + 1
+		end
+	else
+		for i, entity in pairs(aEntities) do
+			local sName = entity:GetName()
+			if (string.match(entity:GetName(), "BotNavi_Point%d")) then
+				PathFindLog(" -> New Point %s", entity:GetName())
+				
+				local aPos = entity:GetPos()
+				hFile:write(string.format("\t[%d] = { x = %0.4f, y = %0.4f, z = %0.4f },\n", iCounter, aPos.x, aPos.y, aPos.z))
+				
+				iCounter = iCounter + 1
+			end
 		end
 	end
 	
 	hFile:write("}\n")
+	hFile:write("\n")
+	hFile:write("---------------\n")
+	hFile:write("Pathfinding.NODE_MAX_DIST = 8\n")
+	hFile:write("Pathfinding.NODE_MAX_DIST_PANIC = 15\n")
+	hFile:write("Pathfinding.NODE_Z_MAX_DIST = 1\n")
+	hFile:write("\n")
+	hFile:write("------------------\n")
+	hFile:write("return BOT_NAVMESH\n")
 	hFile:close()
 	
 	---------------------
 	PathFindLog("Exported %d Points to File %s", iCounter, sFileName)
+	
+	---------------------
+	-- self:InitNavmesh(true)
 	
 	---------------------
 	return true
