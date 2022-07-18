@@ -54,6 +54,24 @@ FinchLog = function(msg, ...)
 end
 
 -------------------------------
+FINCH_LOGGED_MESSAGES = {}
+
+-------------------------------
+FinchLogTimer = function(iTimer, msg, ...)
+
+	----------------
+	local sHandle = tostring(msg)
+	if (simplehash) then
+		sHandle = simplehash.hash(sHandle, 4) end
+		
+	----------------
+	if (not FINCH_LOGGED_MESSAGES[sHandle] or (_time - FINCH_LOGGED_MESSAGES[sHandle] > iTimer)) then
+		FinchLog(msg, ...)
+		FINCH_LOGGED_MESSAGES[sHandle] = _time
+	end
+end
+
+-------------------------------
 BotAPILog = function(msg, ...)
 	local msg = msg
 	if (...) then
@@ -1064,7 +1082,7 @@ FinchPower = {
 		if (bOk) then
 			self:Connect(true)
 		else
-			FinchLog("Not connecting to Server yet")
+			FinchLogTimer(30, "Not connecting to Server yet")
 		end
 	end;
 	------------------------------
