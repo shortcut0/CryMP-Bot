@@ -394,7 +394,18 @@ BotNavigation.IsLastNode = function(self, iNode)
 			local vEndNode = self.CURRENT_PATH_ARRAY[iNode]
 			local vCurrNode = self.CURRENT_PATH_ARRAY[(iNode - 1)]
 			
-			return ((vector.distance(vCurrNode, vEndNode) < 0.5) or self:IsNodeVisible_Source(vEndNode, vCurrNode))
+			return (iNode >= self.CURRENT_PATH_SIZE and (((vector.distance(vCurrNode, vEndNode) < 0.5) or self:IsNodeVisible_Source(vEndNode, vCurrNode))))
+		end
+		
+		-----------
+		-- self:Log(0, "NODE : %d", iNode)
+			
+		-----------
+		local vPos = g_localActor:GetPos()
+		local vEnd = self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_ARRAY]
+		if (vEnd) then
+			local iDistance = vector.distance(vPos, vEnd)
+			return (iDistance < 0.5 or (iDistance < 2.25 and self:IsNodeVisible_Source(vEndNode, vCurrNode)))
 		end
 		
 		-----------

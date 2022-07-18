@@ -31,12 +31,14 @@ Pathfinding = {
 Pathfinding.VALIDATED_NAVMESH = {}
 Pathfinding.NAVMESH_VALIDATED = false
 Pathfinding.VALIDATION_FUNC = nil
+Pathfinding.NAVMESH_WATER_MAX_DEPTH = 1
 Pathfinding.NODE_MAX_DIST = 20
 Pathfinding.NODE_MAX_DIST_PANIC = 25
 Pathfinding.NODE_Z_MAX_DIST = 1
 
 -------------------
 Pathfinding.RECORD_NAVMESH = false
+Pathfinding.AUTO_PAINT_NAVMESH = true
 Pathfinding.RECORDED_NAVMESH = {}
 Pathfinding.RECORD_INSERT_DIST = 2.5
 Pathfinding.RECORD_INSERT_DIST_Z = 0.35
@@ -49,6 +51,9 @@ Pathfinding.Init = function(self, bReload)
 
 	---------------------
 	PathFindLog("Pathfinding.Init()")
+	
+	---------------------
+	self:RemovePaintedNavmesh()
 	
 	---------------------
 	if (not self.InitAStar(bReload)) then
@@ -97,7 +102,13 @@ Pathfinding.InitCVars = function()
 		{ "init",       		"Pathfinding:Init(true)", 				"Re-initializes the Bot Pathfinding System" },
 		{ "reloadfile", 		"Bot:LoadPathfinding()",  				"Reloads the Pathfinding file" },
 		{ "test",       		"Pathfinding:Test(%1)",   				"Tests the Pathfinding System" },
+		{ "test2",       		"Pathfinding:Test2()",   				"Tests the Pathfinding System" },
 		{ "test_live",  		"Pathfinding:LivePathfindingTest(%1)", 	"Tests the Pathfinding System with real time tests" },
+		
+		{ "paintlinks",			"Pathfinding:PaintLinks(nil,nil,30)",	"Paints all Links of all Nodes of the current Navmesh" },
+		
+		{ "livegen",			"Pathfinding:SetLiveNavMeshGen()",		"Toggles Real-Time Navmesh Generation" },
+		
 		{ "record",  			"Pathfinding:Record()",   				"Toggles Realtime-Generating Navmesh" },
 		{ "record_all",  		"Pathfinding:SetRecordAll()",   		"Toggles Recording Positions of all Players" },
 		{ "record_clear", 		"Pathfinding:RecordCls()",				"Clears current temporary Navmesh" },
@@ -134,7 +145,7 @@ end
 -------------------
 -- Pathfinding.InitNavmesh
 
-Pathfinding.InitNavmesh = function(self, bReload)
+Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 	
 	PathFindLog("Pathfinding.InitNavmesh()")
 	
@@ -147,37 +158,11 @@ Pathfinding.InitNavmesh = function(self, bReload)
 	BOT_NAVMESH = nil
 		
 	---------------------
-	local sRules, sMap = string.match(string.lower(Bot.GetLevelName()), "multiplayer/(.*)/(.*)")
-	
-	---------------------
-	local sDataPath = string.format("Bot\\Core\\Pathfinding\\NavigationData\\Maps\\%s\\%s\\data.lua", sRules, sMap)
-	
-	---------------------
-	PathFindLog("Loading Data for Map %s\\%s", sRules, sMap)
-	
-	---------------------
-	if (not fileexists(sDataPath)) then
-		return true, PathFindLog("No Data found for Map %s\\%s", sRules, sMap)
-	end
-	
-	---------------------
-	local sData = string.fileread(sDataPath)
-	
-	---------------------
-	local bOk, hFunc = pcall(loadstring, sData)
-	if (not bOk) then
-		return true, PathFindLog("Failed to init Navmesh, Faulty data.lua")
-	end
-	
-	---------------------
-	local bOk, sErr = pcall(hFunc)
-	if (not bOk) then
-		return true, PathFindLog("Failed to read data.lua")
-	end
-	
-	---------------------
-	if (not BOT_NAVMESH or table.count(BOT_NAVMESH) < 1) then
-		return true, PathFindLog("Empty Navmesh file", sMap, sRules)
+	if (not aNavmesh) then
+		if (not self:LoadNavmesh()) then
+			return false end
+	else
+		BOT_NAVMESH = aNavmesh
 	end
 	
 	---------------------
@@ -199,6 +184,9 @@ Pathfinding.InitNavmesh = function(self, bReload)
 	local iStartTime = os.clock()
 	
 	---------------------
+	PathFindLog("Maximum Node Distance: %f (Panic: %f)", self.NODE_MAX_DIST, self.NODE_MAX_DIST_PANIC)
+	
+	---------------------
 	local iConnections = 0
 	local iNodes = 0
 	local aValidatedMesh = {}
@@ -214,6 +202,7 @@ Pathfinding.InitNavmesh = function(self, bReload)
 		-------------------
 		local aConnections = self:GenerateLinks(i, self.NODE_MAX_DIST)
 		if (table.count(aConnections) == 0) then
+			Particle.SpawnEffect("explosions.flare.a", pos, vectors.up, 0.1)
 			PathFindLog("PANIC: Node %d had no links. retrying with panic distance", i)
 			aConnections = self:GenerateLinks(i, self.NODE_MAX_DIST_PANIC)
 		end
@@ -226,6 +215,9 @@ Pathfinding.InitNavmesh = function(self, bReload)
 	end
 	
 	---------------------
+	self:ValidateLinks(aValidatedMesh)
+	
+	---------------------
 	self.VALIDATED_NAVMESH = aValidatedMesh
 	
 	---------------------
@@ -234,6 +226,69 @@ Pathfinding.InitNavmesh = function(self, bReload)
 	---------------------
 	PathFindLog("Navmesh initialized in %0.4fs (Loops: %d, Nodes: %d, Connections: %d)", (os.clock() - iStartTime), (iNodes * iNodes), iNodes, iConnections)
 	
+	
+	---------------------
+	if (self.RECORDED_NAVMESH and self.AUTO_PAINT_NAVMESH and self.NAVMESH_AUTO_GENERATE) then
+		self:PaintLinks(1) end
+	
+end
+
+---------------------------------------------
+-- Pathfinding.LoadNavmesh
+
+Pathfinding.LoadNavmesh = function(self)
+
+	---------------------
+	local sRules, sMap = string.match(string.lower(Bot.GetLevelName()), "multiplayer/(.*)/(.*)")
+	
+	---------------------
+	local sDataPath = string.format("Bot\\Core\\Pathfinding\\NavigationData\\Maps\\%s\\%s\\data.lua", sRules, sMap)
+	
+	---------------------
+	PathFindLog("Loading Data for Map %s\\%s", sRules, sMap)
+	
+	---------------------
+	if (not fileexists(sDataPath)) then
+		return true, PathFindLog("No Data found for Map %s\\%s", sRules, sMap)
+	end
+	
+	---------------------
+	local sData = string.fileread(sDataPath)
+	
+	---------------------
+	local bOk, hFunc = pcall(loadstring, sData)
+	if (not bOk) then
+		return false, PathFindLog("Failed to init Navmesh, Faulty data.lua")
+	end
+	
+	---------------------
+	local bOk, sErr = pcall(hFunc)
+	if (not bOk) then
+		return false, PathFindLog("Failed to read data.lua")
+	end
+	
+	---------------------
+	if (not BOT_NAVMESH or table.count(BOT_NAVMESH) < 1) then
+		return false, PathFindLog("Empty Navmesh file", sMap, sRules)
+	end
+	
+	---------------------
+	return true
+end
+
+---------------------------------------------
+-- Pathfinding.ValidateLinks
+
+Pathfinding.ValidateLinks = function(self, aNavmesh)
+	for i, aNode in pairs(aNavmesh) do
+		local vNode = aNode.pos
+		for iLink in pairs(aNode.links) do
+			local vLink = aNavmesh[iLink].pos
+			if (not aNavmesh[iLink].links[i]) then
+				aNavmesh[iLink].links[i] = true
+			end
+		end
+	end
 end
 
 ---------------------------------------------
@@ -255,7 +310,9 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance)
 				if (iDistance < fMaxDistance) then
 					local bCanSee = fRayCheck(vector.modify(vSource, "z", 0.25, true), vector.modify(vTarget, "z", 0.25, true), NULL_ENTITY, NULL_ENTITY)
 					if (bCanSee) then
-						aConnections[iTarget] = true
+						if (not self.IsPointIntersectedByWater(vector.validate(vSource), vector.validate(vTarget), self.NAVMESH_WATER_MAX_DEPTH)) then
+							aConnections[iTarget] = true
+						end
 					end
 				end
 			end
@@ -264,6 +321,77 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance)
 	
 	-----------------------
 	return aConnections
+end
+
+---------------------------------------------
+-- Pathfinding.IsPointIntersectedByWater
+
+Pathfinding.IsPointIntersectedByWater = function(vSource, vEnd, iMaxDepth)
+
+	-----------------------
+	local iDistance = vector.distance(vSource, vEnd) / 2
+	local vDirection = vector.scale(vector.getdir(vSource, vEnd, true), -1)
+	
+	-----------------------
+	local vInBetween = {
+		x = vSource.x + (vDirection.x * 5),
+		y = vSource.y + (vDirection.y * 5),
+		z = vSource.z + (vDirection.z * 5)
+	}
+	
+	-----------------------
+	local iWaterHeight = CryAction.GetWaterInfo(vInBetween)
+	if (not iWaterHeight) then
+		return false end
+		
+	-----------------------
+	local vGround = Pathfinding.GetRayHitPosition(vector.modify(vInBetween, "z", 0.25, true), vectors.down, 100)
+	if (not vGround) then
+		return true end
+		
+	-----------------------
+	local iDepth = (vSource.z - vGround.z)
+	if (iDepth > iMaxDepth) then
+		-- Particle.SpawnEffect("explosions.flare.a", vInBetween, vectors.up, 0.1)
+		-- g_localActor:SetPos(vGround)
+		-- Particle.SpawnEffect("explosions.flare.a", vGround, vectors.up, 0.1)
+		-- PathFindLog("Intersected by water: depth: %f", iDepth)
+		return true
+	end
+	
+	return false
+end
+
+---------------------------------------------
+-- Pathfinding.GetRayHitPosition
+
+Pathfinding.GetRayHitPosition = function(vSource, vDirection, iDistance, fFlags, idIgnore)
+
+	-------------------
+	if (not idIgnore) then
+		idIgnore = NULL_ENTITY end
+
+	-------------------
+	if (not fFlags) then
+		fFlags = ent_all end
+		
+	-------------------
+	if (not iDistance) then
+		iDistance = 4096 end
+		
+	-------------------
+	local vDir = vector.scale(vector.new(vDirection), iDistance)
+	
+	-------------------
+	local iHits = Physics.RayWorldIntersection(vSource, vDir, iDistance, fFlags, idIgnore, nil, g_HitTable)
+	local aHits = g_HitTable[1]
+	
+	-------------------
+	if (iHits and iHits > 0 and isArray(aHits)) then
+		return (aHits.pos or aHits.position) end
+	
+	-------------------
+	return nil
 end
 
 ---------------------------------------------
@@ -349,6 +477,30 @@ Pathfinding.LivePathfindingTest = function(self, sEntityName)
 end
 
 ---------------------------------------------
+-- Pathfinding.Test2
+
+Pathfinding.Test2 = function(self)
+	
+	if (not self.TEST_POS_1) then
+		self.TEST_POS_1 = g_localActor:GetPos()
+		PathFindLog("Position 1 Set.")
+	elseif (not self.TEST_POS_2) then
+		self.TEST_POS_2 = g_localActor:GetPos()
+		PathFindLog("Position 2 Set.")
+	else
+	
+		PathFindLog("Intersected by water: %s", (self.IsPointIntersectedByWater(self.TEST_POS_1, self.TEST_POS_2, self.NAVMESH_WATER_MAX_DEPTH) and "Yes" or "No"))
+	
+		local vDir = vector.scale(vector.getdir(self.TEST_POS_1, self.TEST_POS_2), -1)
+		PathFindLog("%s", Vec2Str(vDir))
+		CryAction.PersistantArrow(self.TEST_POS_1, 1, vDir, vDir, "arrow", 10)
+	
+		self.TEST_POS_1 = nil
+		self.TEST_POS_2 = nil
+	end
+end
+
+---------------------------------------------
 -- Pathfinding.Test
 
 Pathfinding.Test = function(self, idClassOrEntity)
@@ -387,12 +539,18 @@ Pathfinding.Test = function(self, idClassOrEntity)
 	
 	---------------------
 	if (not self.TESTFIND_ENTITY) then
+		local iPath = table.count(aPath)
 		for i, node in pairs(aPath) do
 			 Script.SetTimer(i * 500, function()
 				 PathFindLog("Node %d pos %s", i, Vec2Str(node))
 				Particle.SpawnEffect("explosions.flare.a", node, g_Vectors.up, 0.1)
 				g_localActor:SetPos(node)
 			end)
+			if (i < iPath) then
+				local vDir = vector.scale(vector.getdir(node, aPath[(i + 1)]), -1)
+				PathFindLog("%s", Vec2Str(vDir))
+				CryAction.PersistantArrow(node, 1, vDir, vDir, "arrow_" .. i, 30)
+			end
 		end
 	end
 	---------------------
@@ -555,6 +713,32 @@ Pathfinding.GetMapName = function()
 end
 
 -------------------
+-- Pathfinding.PaintLinks
+
+Pathfinding.PaintLinks = function(self, bForce, bClear, iTime)
+
+	if (not bForce and self.RECORD_LINKS_LASTUPDATE and (_time - self.RECORD_LINKS_LASTUPDATE < 0.2)) then
+		return end
+	
+	local iRadius = 1
+	if (bClear) then
+		iRadius = 0 end
+		
+	if (not iTime) then
+		iTime = 1 end
+		
+	local aNavmesh = self.VALIDATED_NAVMESH
+	for i, vNode in pairs(aNavmesh) do
+		for iLink, bLinked in pairs(vNode.links) do
+			local vDir = vector.scale(vector.getdir(vector.validate(vNode), vector.validate(aNavmesh[iLink])), -1)
+			CryAction.PersistantArrow(vNode, iRadius, vDir, vDir, "arrow_" .. i .. "+" .. iLink, iTime)
+		end
+	end
+	
+	self.RECORD_LINKS_LASTUPDATE = _time
+end
+
+-------------------
 -- Pathfinding.PaintNavmesh
 
 Pathfinding.PaintNavmesh = function(self)
@@ -692,11 +876,26 @@ end
 Pathfinding.SetRecordAll = function(self)
 	if (self.RECORDED_NAVMESH_ALL) then
 		self.RECORDED_NAVMESH_ALL = false
+		self:PaintLinks(1, 1)
 	else
 		self.RECORDED_NAVMESH_ALL = true
 	end
 	
 	PathFindLog("All-Player Recording: %s", (self.RECORDED_NAVMESH_ALL and "Started" or "Paused"))
+	
+end
+
+-------------------
+-- Pathfinding.SetLiveNavMeshGen
+
+Pathfinding.SetLiveNavMeshGen = function(self)
+	if (self.NAVMESH_AUTO_GENERATE) then
+		self.NAVMESH_AUTO_GENERATE = false
+	else
+		self.NAVMESH_AUTO_GENERATE = true
+	end
+	
+	PathFindLog("Real-time Navmesh Validation: %s", (self.NAVMESH_AUTO_GENERATE and "Started" or "Paused"))
 	
 end
 
@@ -708,6 +907,9 @@ Pathfinding.RecordCls = function(self)
 	----------------
 	local iNodes = table.count(self.RECORDED_NAVMESH or {})
 	PathFindLog("Flushed %d Nodes", iNodes)
+	
+	----------------
+	self:RemovePaintedNavmesh()
 	
 	----------------
 	self.RECORDED_NAVMESH = {}
@@ -732,6 +934,9 @@ Pathfinding.Update = function(self)
 	else
 		self:RecordPlayerMovement(g_localActor)
 	end
+	
+	if (self.AUTO_PAINT_NAVMESH and self.NAVMESH_AUTO_GENERATE) then
+		self:PaintLinks() end
 end
 
 -------------------
@@ -767,7 +972,11 @@ Pathfinding.RecordPlayerMovement = function(self, aActor)
 			table.insert(self.RECORDED_NAVMESH, vPos)
 			PathFindLog("%s$9 Added New Node $4%d$9 Pos: $1%s$9", aActor:GetName(), table.count(self.RECORDED_NAVMESH), Vec2Str(vPos))
 			if (self.AUTO_PAINT_NAVMESH) then
-				self:PaintNavmesh() end
+				self:PaintNavmesh()  end
+				
+			if (self.NAVMESH_AUTO_GENERATE) then
+				self.InitNavmesh(self, true, self.RECORDED_NAVMESH)
+			end
 		end
 	end
 	
