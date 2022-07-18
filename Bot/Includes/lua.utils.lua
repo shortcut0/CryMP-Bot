@@ -41,6 +41,20 @@ luautils.isArray = function(hParam)
 end
 
 ---------------------------
+-- luautils.isNull
+
+luautils.isNull = function(hParam)
+	return type(hParam) == "nil"
+end
+
+---------------------------
+-- luautils.isEntityId
+
+luautils.isEntityId = function(hParam)
+	return type(hParam) == "userdata"
+end
+
+---------------------------
 -- luautils.fileexists
 
 luautils.fileexists = function(sPath)
@@ -84,10 +98,12 @@ end
 
 -------------------
 getrandom = luautils.random
+isNull = luautils.isNull
 isArray = luautils.isArray
 isString = luautils.isString
 isNumber = luautils.isNumber
 isfunction = luautils.isfunction
+isEntityId = luautils.isEntityId
 fileexists = luautils.fileexists
 
 -------------------

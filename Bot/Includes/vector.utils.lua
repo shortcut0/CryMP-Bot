@@ -13,6 +13,12 @@ vector = {
 	requires = "lua.utils.lua;table.utils.lua"
 }
 
+-------------------
+vectors = {
+	down = { x = 0, y = 0, z = -1 },
+	up = { x = 0, y = 0, z = 1 },
+}
+
 ---------------------------
 -- vector.isvector
 
@@ -40,7 +46,7 @@ end
 vector.iskey = function(sKey)
 
 	------------------
-	local sKey = string.lower(sKey)
+	local sKey = string.lower(sKey or "")
 	return (sKey == "x" or sKey == "y" or sKey == "z")
 end
 
@@ -140,6 +146,33 @@ vector.add = function(v1, v2)
 	
 	------------------
 	return v1
+end
+
+---------------------------
+-- vector.addN
+
+vector.addN = function(v, i, sKey)
+
+	------------------
+	if (not vector.isvector(v)) then
+		return end
+
+	------------------
+	if (not isNumber(i)) then
+		return v end
+	
+	------------------
+	local vNew = vector.new(v)
+	if (vector.iskey(sKey)) then
+		vNew[sKey] = vNew[sKey] + i
+	else
+		vNew.x = vNew.x + i
+		vNew.y = vNew.y + i
+		vNew.z = vNew.z + i
+	end
+	
+	------------------
+	return vNew
 end
 
 ---------------------------

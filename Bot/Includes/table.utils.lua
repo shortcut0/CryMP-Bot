@@ -258,6 +258,9 @@ end
 
 table.shuffle = function(t1)
 
+	if (not table.isarray(t1)) then
+		return t1 end
+
 	local tNew = {}
 	local aIndexes = {}
 
