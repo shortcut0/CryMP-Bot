@@ -99,16 +99,22 @@ Pathfinding.InitCVars = function()
 	---------------------
 	local sPrefix = "pathfinding_"
 	local aCVars = {
+	
+		---------------
 		{ "init",       		"Pathfinding:Init(true)", 				"Re-initializes the Bot Pathfinding System" },
 		{ "reloadfile", 		"Bot:LoadPathfinding()",  				"Reloads the Pathfinding file" },
 		{ "test",       		"Pathfinding:Test(%1)",   				"Tests the Pathfinding System" },
 		{ "test2",       		"Pathfinding:Test2()",   				"Tests the Pathfinding System" },
 		{ "test_live",  		"Pathfinding:LivePathfindingTest(%1)", 	"Tests the Pathfinding System with real time tests" },
 		
+		---------------
 		{ "paintlinks",			"Pathfinding:PaintLinks(nil,nil,30)",	"Paints all Links of all Nodes of the current Navmesh" },
+		{ "paintunlinked",		"Pathfinding:PaintUnlinkedNodes()",		"Shows all nodes that do not have any links" },
 		
+		---------------
 		{ "livegen",			"Pathfinding:SetLiveNavMeshGen()",		"Toggles Real-Time Navmesh Generation" },
 		
+		---------------
 		{ "record",  			"Pathfinding:Record()",   				"Toggles Realtime-Generating Navmesh" },
 		{ "record_all",  		"Pathfinding:SetRecordAll()",   		"Toggles Recording Positions of all Players" },
 		{ "record_clear", 		"Pathfinding:RecordCls()",				"Clears current temporary Navmesh" },
@@ -117,8 +123,14 @@ Pathfinding.InitCVars = function()
 		{ "record_livepaint", 	"Pathfinding:SetAutoPaint()",			"Toggles Real-time Painting of Navmesh" },
 		{ "record_import", 		"Pathfinding:MergeNavmesh()",			"Merges already Generated Navmesh you newly Generated one" },
 		{ "record_insert", 		"Pathfinding:InsertNode()",				"Insers a New node at your current position" },
+		{ "record_remove", 		"Pathfinding:RemoveNodes(%%)",			"Removes all Nodes in X Radius" },
 		
+		---------------
 		{ "record_export", 		"Pathfinding:ExportNavmesh(Pathfinding.RECORDED_NAVMESH)", "Exports the newly generated Navmesh" },
+		
+		---------------
+		{ "node_insertdist",	"Pathfinding.RECORD_INSERT_DIST = tonumber(%1)",	"Changes the distance at which new nodes will be inserted" },
+		{ "node_insertdistz",	"Pathfinding.RECORD_INSERT_DIST_Z = tonumber(%1)","Changes the Z-distance at which new nodes will be inserted" },
 	}
 	local iCVars = table.count(aCVars)
 	
@@ -173,12 +185,19 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 		return false end
 		
 	---------------------
-	local fRayCheck = Physics.RayTraceCheck
-	if (not luautils.isfunction(fRayCheck)) then
+	local fRayCheck_P = Physics.RayTraceCheck
+	if (not luautils.isfunction(fRayCheck_P)) then
+		return false end
+		
+	---------------------
+	local fRayCheck_S = System.RayTraceCheck
+	if (not luautils.isfunction(fRayCheck_S)) then
 		return false end
 	
 	---------------------
-	self.VALIDATION_FUNC = fRayCheck
+	self.VALIDATION_FUNC = function(vSrc, vTgt, iP2, iP3)
+		return (fRayCheck_P(vSrc, vTgt, iP2, iP3) or fRayCheck_S(vSrc, vTgt, 1, 1))
+	end
 	
 	---------------------
 	local iStartTime = os.clock()
@@ -277,18 +296,50 @@ Pathfinding.LoadNavmesh = function(self)
 end
 
 ---------------------------------------------
+-- Pathfinding.PaintUnlinkedNodes
+
+Pathfinding.PaintUnlinkedNodes = function(self)
+
+	local aNavmesh = self.VALIDATED_NAVMESH
+	for i, aNode in pairs(aNavmesh) do
+		local vNode = aNode.pos
+		if (table.count(aNode.links) == 0) then
+			Particle.SpawnEffect("explosions.flare.a", vNode, vectors.up, 0.1)
+		end
+	end
+end
+
+---------------------------------------------
 -- Pathfinding.ValidateLinks
 
 Pathfinding.ValidateLinks = function(self, aNavmesh)
+
+	----------------
+	local iValidated = 0
+	local bFixed = false
+	local iNodes = 0
+	
+	----------------
 	for i, aNode in pairs(aNavmesh) do
 		local vNode = aNode.pos
-		for iLink in pairs(aNode.links) do
-			local vLink = aNavmesh[iLink].pos
-			if (not aNavmesh[iLink].links[i]) then
-				aNavmesh[iLink].links[i] = true
+		if (table.count(aNode.links) > 0) then
+			bFixed = false
+			for iLink in pairs(aNode.links) do
+				local vLink = aNavmesh[iLink].pos
+				if (not aNavmesh[iLink].links[i]) then
+					aNavmesh[iLink].links[i] = true
+					iValidated = iValidated + 1
+					bFixed = true
+				end
 			end
+			if (bFixed) then
+				iNodes = iNodes + 1 end
 		end
 	end
+	
+	----------------
+	if (iValidated > 0) then
+		PathFindLog("Fixed %d Missing Links of %d Nodes", iValidated, iNodes) end
 end
 
 ---------------------------------------------
@@ -808,6 +859,46 @@ Pathfinding.SetAutoPaint = function(self)
 end
 
 -------------------
+-- Pathfinding.RemoveNodes
+
+Pathfinding.RemoveNodes = function(self, iRadius)
+	
+	----------------
+	if (not self.RECORDED_NAVMESH) then
+		return false end
+		
+	----------------
+	if (not self.RECORDED_NAVMESH) then
+		self.RECORDED_NAVMESH = {} end
+	
+	----------------
+	local iRadius = iRadius
+	if (not iRadius) then
+		iRadius = 1 end
+	
+	----------------
+	local iNodesRemoved = 0
+	
+	----------------
+	local vPos = g_localActor:GetPos()
+	local iNodes = table.count(self.RECORDED_NAVMESH)
+	local iCurrentNode = 1
+	local vNode
+	
+	----------------
+	repeat
+		vNode = self.RECORDED_NAVMESH[iCurrentNode]
+		if (vNode and vector.distance(vNode, vPos) <= iRadius) then
+			iNodesRemoved = iNodesRemoved + 1
+		end
+		iCurrentNode = iCurrentNode + 1
+	until (not vNode or (iCurrentNode > iNodes))
+	
+	----------------
+	PathFindLog("Forcefully removed %d nodes", iNodesRemoved)
+end
+
+-------------------
 -- Pathfinding.InsertNode
 
 Pathfinding.InsertNode = function(self)
@@ -841,13 +932,38 @@ Pathfinding.MergeNavmesh = function(self)
 		return false end
 	
 	----------------
+	local bCanInsert = false
+	
+	----------------
+	local aMerged = {}
+	
+	----------------
 	local iMerged = 0
-	for i, node in pairs(BOT_NAVMESH) do
-		if (not Pathfinding.IsNodesInRadius(node, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH)) then
-			table.insert(self.RECORDED_NAVMESH, node)
+	for i, vNode in pairs(BOT_NAVMESH) do
+			
+		--[[
+		----------------
+		bCanInsert = true
+			
+		----------------
+		if (not Pathfinding.IsNodesInRadius(vNode, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 1.5)) then
+			bCanInsert = true end
+			
+		----------------
+		if (not bCanInsert) then
+			bCanInsert = not self:CompareNodeZHeight(vNode, aActor.LAST_WORLD_POSITION)
+			bCanInsert = bCanInsert and not Pathfinding.IsNodesInRadius(vNode, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 0.15)
+		end
+		--]]
+	
+		if (not Pathfinding.IsNodesInRadius(vNode, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH)) then
+			table.insert(aMerged, vNode)
 			iMerged = iMerged + 1
 		end
 	end
+	
+	----------------
+	table.append(self.RECORDED_NAVMESH, aMerged)
 	
 	----------------
 	PathFindLog("Added %d new Nodes to Navmesh", iMerged)
@@ -1138,3 +1254,13 @@ Pathfinding.ExportNavmesh = function(self, aNodes)
 	return true
 	
 end
+
+
+PathFindLog("%s", table.tostring(Physics))
+PathFindLog("%s", table.tostring(System))
+PathFindLog("%s", table.tostring(CryAction))
+
+PathFindLog("%s", tostring(System.RayTraceCheck(vectors.up, vectors.down, 1, 2)))
+PathFindLog("%s", tostring(Physics.RayTraceCheck(vectors.up, vectors.down, NULL_ENTITY, NULL_ENTITY)))
+-- System.IsPointVisible()
+-- CryAction.IsGameObjectProbablyVisible()

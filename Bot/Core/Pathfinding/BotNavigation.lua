@@ -33,6 +33,7 @@ BotNavigation.CURRENT_PATH_NODE = nil
 BotNavigation.CURRENT_PATH_POS = nil
 BotNavigation.CURRENT_PATH_ENVIRONMENT_CLASS = nil
 BotNavigation.CURRENT_PATH_NODE_ABOVE = nil
+BotNavigation.CURRENT_PATH_NODE_ABOVE_TERRAIN = nil
 BotNavigation.CURRENT_PATH_SIZE = nil
 BotNavigation.CURRENT_PATH_ARRAY = nil
 BotNavigation.CURRENT_PATH_FINISHTIME = nil
@@ -50,7 +51,7 @@ BotNavigation.CURRENT_PATH_REVERTED = nil
 BotNavigation.Init = function(self)
 
 	----------------
-	self:Log(0, "BotNavigation.Init()")
+	NaviLog(0, "BotNavigation.Init()")
 	
 	----------------
 	self:InitGlobals()
@@ -173,7 +174,10 @@ BotNavigation.Update = function(self)
 	local bReverted = false
 	local hCurrentNode = self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_NODE]
 	if (hCurrentNode) then
+		
 		self.CURRENT_PATH_NODE_ABOVE = (self:IsNodeAbove(hCurrentNode) or self:IsNodeBelow(hCurrentNode))
+		self.CURRENT_PATH_NODE_ABOVE_TERRAIN = (self.CURRENT_PATH_NODE_ABOVE or (self:IsNodeAboveTerrain(hCurrentNode, 2)))
+		
 		if (self:IsNodeUnreachable(hCurrentNode)) then
 			if (self.CURRENT_PATH_NODE > 1) then
 				self.CURRENT_PATH_NODE = self.CURRENT_PATH_NODE - 1
@@ -279,6 +283,52 @@ BotNavigation.Log = function(self, iVerbosity, ...)
 			return NaviLog(...)
 		end
 	end
+
+---------------------------
+-- CanCircleJumpOnCurrentPath
+
+BotNavigation.CanCircleJumpOnCurrentPath = function(self)
+
+	if (self.CURRENT_PATH_NODE_ABOVE) then
+		return false end
+	
+	if (self.CURRENT_PATH_NODE_ABOVE_TERRAIN) then
+		return false end
+	
+	if (not self.IsInOpenSpace()) then
+		return false end
+		
+	return true
+end
+
+---------------------------
+-- IsInOpenSpace
+
+BotNavigation.IsInOpenSpace = function()
+	return true
+end
+
+---------------------------
+-- GetTargetId
+
+BotNavigation.GetTargetId = function(self)
+	local hEntity = self.CURRENT_PATH_TARGET
+	if (hEntity) then
+		return hEntity.id end
+		
+	return
+end
+
+---------------------------
+-- IsTargetPlayer
+
+BotNavigation.IsTargetPlayer = function(self, bNoBots)
+	local hEntity = self.CURRENT_PATH_TARGET
+	if (hEntity) then
+		return ((hEntity.class == "Player") and (not bNoBots or (hEntity.actor:IsPlayer()))) end
+		
+	return
+end
 
 ---------------------------
 -- CanSeeNextNode
@@ -439,6 +489,26 @@ BotNavigation.IsNodeAbove = function(self, vNode)
 		
 		-----------
 		return (zDiff > 0.8)
+	end
+
+---------------------------
+-- IsNodeAboveTerrain
+
+BotNavigation.IsNodeAboveTerrain = function(self, vNode, iMaxDistance)
+		local iTerrain = System.GetTerrainElevation(vNode)
+		if (not iTerrain) then
+			return true end
+		
+		-----------
+		local zDiff = vNode.z - iTerrain
+		
+		-----------
+		local iMaxDistance = iMaxDistance
+		if (not iMaxDistance) then
+			iMaxDistance = 1 end
+		
+		-----------
+		return (zDiff > iMaxDistance)
 	end
 
 ---------------------------
