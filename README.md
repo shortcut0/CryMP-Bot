@@ -17,6 +17,7 @@ DONE:
     - Created New Navigation System
     - Updated Navigation System and Navmesh files
     - Imporved Navmesh AutoGen
+  * [20.07.2022] Added new required Includes and Updated Pathfinding files
   
 ---------------------------
 -shortcut0 <3
