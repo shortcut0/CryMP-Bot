@@ -96,6 +96,18 @@ luautils.random = function(min, max, floor)
 	return iRandom
 end
 
+---------------------------
+-- luautils.checkNumber
+
+luautils.checkNumber = function(iNumber, iDefault)
+
+	-------------
+	if (not isNumber(iNumber)) then
+		return iDefault end
+	-------------
+	return iNumber
+end
+
 -------------------
 getrandom = luautils.random
 isNull = luautils.isNull
@@ -105,6 +117,7 @@ isNumber = luautils.isNumber
 isfunction = luautils.isfunction
 isEntityId = luautils.isEntityId
 fileexists = luautils.fileexists
+checkNumber = luautils.checkNumber
 
 -------------------
 return luautils

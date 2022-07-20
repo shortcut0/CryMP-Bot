@@ -256,17 +256,23 @@ BotNavigation.Update = function(self)
 	end
 	
 	----------------
+	local bReturn = true
+	
+	----------------
 	if (hCurrentNode) then
 		self:Log(3, "Traveling to current path node: %d (pos: %s, distance: %f)", self.CURRENT_PATH_NODE, Vec2Str(hCurrentNode), vector.distance(g_localActor:GetPos(), hCurrentNode))
 		Bot:StartMoving(1, hCurrentNode, true)
 		-- Particle.SpawnEffect("explosions.flare.a", hCurrentNode, g_Vectors.up, 0.1)
 	else
-		self:Log(3, "Failed to retrive current pathnode (id: %d)", self.CURRENT_PATH_NODE)
+		self:LogWarning(3, "Failed to retrive current pathnode (id: %d)", self.CURRENT_PATH_NODE)
+		bReturn = false
 	end
 		
 	----------------
 	self.CURRENT_PATH_POS = hCurrentNode
-	
+		
+	----------------
+	return bReturn
 end
 
 ---------------------------
@@ -281,6 +287,44 @@ BotNavigation.Log = function(self, iVerbosity, ...)
 		
 		if (bLog) then
 			return NaviLog(...)
+		end
+	end
+
+---------------------------
+-- Log
+
+BotNavigation.LogWarning = function(self, iVerbosity, ...)
+		local bLog = true
+		if (isNumber(iVerbosity)) then
+			if (iVerbosity > NAVIGATION_LOG_VERBOSITY) then
+				bLog = false end
+		end
+		
+		if (bLog) then
+			local aArgs = { ... }
+			local sMsg = table.popFirst(aArgs)
+			if (not sMsg) then
+				sMsg = "" end
+			return NaviLog("$9[$6Warning$9] " .. sMsg, unpack(aArgs))
+		end
+	end
+
+---------------------------
+-- LogError
+
+BotNavigation.LogError = function(self, iVerbosity, ...)
+		local bLog = true
+		if (isNumber(iVerbosity)) then
+			if (iVerbosity > NAVIGATION_LOG_VERBOSITY) then
+				bLog = false end
+		end
+		
+		if (bLog) then
+			local aArgs = { ... }
+			local sMsg = table.popFirst(aArgs)
+			if (not sMsg) then
+				sMsg = "" end
+			return NaviLog("$9[$4Error$9] " .. sMsg, unpack(aArgs))
 		end
 	end
 
@@ -385,7 +429,7 @@ BotNavigation.IsNodeVisible_Handle = function(self, vSource, vTarget, sHandle, i
 		self.UNSEEN_NODES_FRAMES[sHandle] = (self.UNSEEN_NODES_FRAMES[sHandle] or 0) + 1
 		
 		-----------
-		return (self.UNSEEN_NODES_FRAMES[sHandle] >= iThreshold)
+		return (self.UNSEEN_NODES_FRAMES[sHandle] <= iThreshold)
 	end
 	
 ---------------------------
@@ -399,6 +443,21 @@ BotNavigation.IsNodeVisible = function(self, vNode)
 			bVisible = Pathfinding.CanSeeNode(g_localActor:GetBonePos("Bip01 Pelvis"), vNode, g_localActorId)
 		end
 		
+		-----------
+		return bVisible
+	end
+	
+---------------------------
+-- IsNodeVisibleEx
+
+BotNavigation.IsNodeVisibleEx = function(self, vNode)
+	
+		-----------
+		local bVisible = 
+		(BotNavigation:IsNodeVisible(vector.modify(vNode, "z", 0.25, true)) or 
+		BotNavigation:IsNodeVisible(vector.modify(vNode, "z", 0.5, true)) or 
+		BotNavigation:IsNodeVisible(vector.modify(vNode, "z", 1, true))) 
+	
 		-----------
 		return bVisible
 	end
@@ -557,12 +616,18 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 		local bTarget = false
 		
 		-----------
+		-- self:Log(0, "Update Env ??")
+		if (not self.SPAWNPOINT_ENVIRONMENT or (self.SPAWNPOINT_ENVIRONMENT[1] + 1) > self.SPAWNPOINT_ENVIRONMENT[2]) then
+			self:Log(0, "Refresh Env ??")
+			self:ClearPathGoalEnvironemnt(sTargetsClass)
+		end
+		
+		-----------
 		if (isString(sTargetsClass)) then
-			-- self:Log(0, "Update Env ??")
-			if (not self.SPAWNPOINT_ENVIRONMENT or (self.SPAWNPOINT_ENVIRONMENT[1] + 1) > self.SPAWNPOINT_ENVIRONMENT[2]) then
-				-- self:Log(0, "Refresh Env ??")
-				self:ClearPathGoalEnvironemnt(sTargetsClass)
-			end
+			
+			-----------
+			if (self.SPAWNPOINT_ENVIRONMENT[2] == 0) then
+				return false, self:Log(3, "No Entities Found!") end
 			
 			-----------
 			self.SPAWNPOINT_ENVIRONMENT[1] = self.SPAWNPOINT_ENVIRONMENT[1] + 1
@@ -600,11 +665,19 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 		end
 		
 		-----------
+		local hTimerStart = timerinit()
+		
+		-----------
+		local iDistance = 0
 		local aPath = {}
 		local vGoal
 		if (hTarget) then
-			vGoal = vector.modify(hTarget:GetPos(), "z", 0.5, true)
-			aPath = Pathfinding:GetPath(vector.modify(g_localActor:GetPos(), "z", 0.5, true), vGoal)
+			local vPos = g_localActor:GetPos()
+			local vTarget = hTarget:GetPos()
+			iDistance = vector.distance(vPos, vTarget)
+			
+			vGoal = vector.modify(vTarget, "z", 0.5, true)
+			aPath = Pathfinding:GetPath(vector.modify(vPos, "z", 0.5, true), vGoal)
 			if (not aPath and bPlayer) then
 				aPath = self:GetNewPath(self.CURRENT_PATH_ENVIRONMENT_CLASS, true)
 			end
@@ -620,18 +693,22 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 			self.CURRENT_PATH_LAST_TARGET = hTarget
 			self.CURRENT_PATH_GOAL = vGoal
 			self.CURRENT_PATH_IGNOREPLAYERS = bIgnorePlayers
-			self:Log(0, "$4Generated new Random Path (Target Class: %s (id: %s), Nodes: %d)", hTarget.class, tostring(hTarget.id), self.CURRENT_PATH_SIZE)
+			
+			self:Log(0, "Path Generated in %0.4fs (tClass: %s, tId: %s), tDist: %f, iNodes: %d)", timerdiff(hTimerStart), hTarget.class, tostring(hTarget.id), iDistance, self.CURRENT_PATH_SIZE)
 		else
-			self:Log(0, "Failed to retrive new path to class %s!!", tostring(sTargetsClass))
-			self:Log(0, "	environment count: %d/%d", self.SPAWNPOINT_ENVIRONMENT[1],self.SPAWNPOINT_ENVIRONMENT[2])
+			self:Log(3, "Failed to retrive new path to class %s!!", tostring(sTargetsClass))
+			self:Log(3, "	environment count: %d/%d", self.SPAWNPOINT_ENVIRONMENT[1], self.SPAWNPOINT_ENVIRONMENT[2])
 			if (bPlayer and not bRetry) then
-				-- self:SetEntityUnreachable(hTarget)
 				self:GetNewPath(self.CURRENT_PATH_ENVIRONMENT_CLASS, true, true)
 			end
 			
 			if (hTarget) then
 				self:SetEntityUnreachable(hTarget) end
+				
+			return false
 		end
+		
+		return true
 	end
 
 ---------------------------
@@ -690,12 +767,17 @@ BotNavigation.GetRandomEntitiesForEnvironment = function(self)
 BotNavigation.ClearPathGoalEnvironemnt = function(self, sTargetsClass)
 	
 		-----------
-		if (not sTargetsClass or sTargetsClass == "") then
+		local sTargetsClass = sTargetsClass
+		if (not isString(sTargetsClass)) then
+			self.SPAWNPOINT_ENVIRONMENT = { 1, 0, {} }
 			return end
 	
 		-----------
-		if (not sTargetsClass) then
-			sTargetsClass = self:GetRandomEntitiesForEnvironment() end
+		if (not sTargetsClass or sTargetsClass == "") then
+			sTargetsClass = self:GetRandomEntitiesForEnvironment() 
+			if (not sTargetsClass) then
+				return self:LogError("No Entities for Random Goal Environment were found!") end
+			end
 	
 		-----------
 		self.SPAWNPOINT_ENVIRONMENT = {
@@ -707,7 +789,7 @@ BotNavigation.ClearPathGoalEnvironemnt = function(self, sTargetsClass)
 		-----------
 		self.SPAWNPOINT_ENVIRONMENT[2] = table.count(self.SPAWNPOINT_ENVIRONMENT[3])
 		if (self.SPAWNPOINT_ENVIRONMENT[2] == 0) then
-			self:Log(0, "Warning: No Entities of Class %s found for Environment!") end
+			self:LogWarning(0, "No Entities of Class '%s' found for Environment!", sTargetsClass) end
 	end
 
 ---------------------------

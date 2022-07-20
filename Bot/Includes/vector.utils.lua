@@ -16,6 +16,8 @@ vector = {
 -------------------
 vectors = {
 	down = { x = 0, y = 0, z = -1 },
+	down_m = { x = 0, y = 0, z = -0.75 },
+	down_s = { x = 0, y = 0, z = -0.95 },
 	up = { x = 0, y = 0, z = 1 },
 }
 
@@ -66,6 +68,23 @@ vector.new = function(v)
 	else
 		return { x = 0, y = 0, z = 0 }
 	end
+end
+
+---------------------------
+-- vector.make
+
+vector.make = function(iX, iY, iZ, vReturn)
+	
+	local vNew = {
+		x = checkNumber(iX, 0),
+		y = checkNumber(iY, 0),
+		z = checkNumber(iZ, 0)
+	}
+	
+	if (vReturn) then
+		vReturn = vNew end
+	
+	return vNew
 end
 
 ---------------------------

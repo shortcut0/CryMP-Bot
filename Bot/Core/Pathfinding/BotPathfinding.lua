@@ -45,6 +45,11 @@ Pathfinding.RECORD_INSERT_DIST_Z = 0.35
 Pathfinding.RECORD_SKIP_FLYING = true
 
 -------------------
+
+BOT_NAVMESH = nil
+FORCED_LINKS = {}
+	
+-------------------
 -- Pathfinding.Init
 
 Pathfinding.Init = function(self, bReload)
@@ -116,6 +121,7 @@ Pathfinding.InitCVars = function()
 		
 		---------------
 		{ "record",  			"Pathfinding:Record()",   				"Toggles Realtime-Generating Navmesh" },
+		{ "record_link",  		"Pathfinding:ForceLinkNodes(%%)",		"Forcefully links 2 Nodes together" },
 		{ "record_all",  		"Pathfinding:SetRecordAll()",   		"Toggles Recording Positions of all Players" },
 		{ "record_clear", 		"Pathfinding:RecordCls()",				"Clears current temporary Navmesh" },
 		{ "record_paint", 		"Pathfinding:PaintNavmesh()",			"Paints the Currently Generated Navmesh on the Map" },
@@ -168,6 +174,7 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 		
 	---------------------
 	BOT_NAVMESH = nil
+	FORCED_LINKS = {}
 		
 	---------------------
 	if (not aNavmesh) then
@@ -216,6 +223,10 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 		-- end)
 	
 		-------------------
+		if (not FORCED_LINKS[i]) then
+			FORCED_LINKS[i] = {} end
+	
+		-------------------
 		iNodes = iNodes + 1
 	
 		-------------------
@@ -244,7 +255,6 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 	
 	---------------------
 	PathFindLog("Navmesh initialized in %0.4fs (Loops: %d, Nodes: %d, Connections: %d)", (os.clock() - iStartTime), (iNodes * iNodes), iNodes, iConnections)
-	
 	
 	---------------------
 	if (self.RECORDED_NAVMESH and self.AUTO_PAINT_NAVMESH and self.NAVMESH_AUTO_GENERATE) then
@@ -292,6 +302,12 @@ Pathfinding.LoadNavmesh = function(self)
 	end
 	
 	---------------------
+	if (NAVMESH_FORCED_LINKS and table.count(NAVMESH_FORCED_LINKS) >= 1) then
+		FORCED_LINKS = NAVMESH_FORCED_LINKS
+		PathFindLog("Found %d Forced Links", table.count(NAVMESH_FORCED_LINKS))
+	end
+	
+	---------------------
 	return true
 end
 
@@ -321,6 +337,8 @@ Pathfinding.ValidateLinks = function(self, aNavmesh)
 	
 	----------------
 	for i, aNode in pairs(aNavmesh) do
+			
+		----------------
 		local vNode = aNode.pos
 		if (table.count(aNode.links) > 0) then
 			bFixed = false
@@ -355,13 +373,25 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance)
 	-----------------------
 	local aConnections = {}
 	for iTarget, vTarget in pairs(BOT_NAVMESH) do
+			
+		----------------
 		if (iTarget ~= iSource) then
-			if ((vTarget.z - vSource.z < self.NODE_Z_MAX_DIST) and (vTarget.z - vSource.z > -self.NODE_Z_MAX_DIST)) then
+	
+			----------------
+			-- if (not FORCED_LINKS[iSource][i]) then
+				-- FORCED_LINKS[iSource][i] = false end
+				
+			----------------
+			local bForcedLink = (FORCED_LINKS[iSource][iTarget] ~= nil)
+			if (bForcedLink) then
+				PathFindLog("Forced links!") 
+			end
+			if (bForcedLink or ((vTarget.z - vSource.z < self.NODE_Z_MAX_DIST) and (vTarget.z - vSource.z > -self.NODE_Z_MAX_DIST))) then
 				local iDistance = vector.distance(vSource, vTarget)
-				if (iDistance < fMaxDistance) then
-					local bCanSee = fRayCheck(vector.modify(vSource, "z", 0.25, true), vector.modify(vTarget, "z", 0.25, true), NULL_ENTITY, NULL_ENTITY)
+				if (bForcedLink or (iDistance < fMaxDistance)) then
+					local bCanSee = bForcedLink or fRayCheck(vector.modify(vSource, "z", 0.25, true), vector.modify(vTarget, "z", 0.25, true), NULL_ENTITY, NULL_ENTITY)
 					if (bCanSee) then
-						if (not self.IsPointIntersectedByWater(vector.validate(vSource), vector.validate(vTarget), self.NAVMESH_WATER_MAX_DEPTH)) then
+						if (bForcedLink or (not self.IsPointIntersectedByWater(vector.validate(vSource), vector.validate(vTarget), self.NAVMESH_WATER_MAX_DEPTH))) then
 							aConnections[iTarget] = true
 						end
 					end
@@ -624,7 +654,7 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 	-----------------
 	local vClosest, iClosest = self:GetClosestVisiblePoint(vSource)
 	if (not vClosest) then
-		vClosest, iClosest = self:GetClosestPoint(vSource) end
+		vClosest, iClosest = self:GetClosestPoint(vSource, nil, self.NODE_MAX_DIST) end
 		
 	-----------------
 	if (not vClosest) then
@@ -736,9 +766,9 @@ end
 ---------------------------------------------
 -- Pathfinding.GetClosestPoint
 
-Pathfinding.GetClosestPoint = function(self, vSource, pred)
+Pathfinding.GetClosestPoint = function(self, vSource, pred, iMaxDistance)
 
-	local aClosest = { nil, nil, -1 }
+	local aClosest = { nil, nil, (iMaxDistance or -1) }
 	
 	-----------------
 	for i, v in pairs(self.VALIDATED_NAVMESH) do
@@ -826,14 +856,17 @@ end
 -------------------
 -- Pathfinding.RemovePaintedNavmesh
 
-Pathfinding.RemovePaintedNavmesh = function(self)
+Pathfinding.RemovePaintedNavmesh = function(self, bOnlyInvalid)
 		
 	----------------
 	local iCounter = 0
 	for i, idEntity in pairs(System.GetEntities()) do
-		if (string.match(idEntity:GetName(), "BotNavi_Point(%d+)_Painted")) then
-			System.RemoveEntity(idEntity.id)
-			iCounter = iCounter + 1
+		local iNode = string.match(idEntity:GetName(), "BotNavi_Point(%d+)_Painted")
+		if (iNode) then
+			if (not bOnlyInvalid or (not self.RECORDED_NAVMESH[iNode])) then
+				System.RemoveEntity(idEntity.id)
+				iCounter = iCounter + 1
+			end
 		end
 	end
 	
@@ -873,7 +906,7 @@ Pathfinding.RemoveNodes = function(self, iRadius)
 	
 	----------------
 	local iRadius = iRadius
-	if (not iRadius) then
+	if (not isNumber(iRadius)) then
 		iRadius = 1 end
 	
 	----------------
@@ -889,10 +922,19 @@ Pathfinding.RemoveNodes = function(self, iRadius)
 	repeat
 		vNode = self.RECORDED_NAVMESH[iCurrentNode]
 		if (vNode and vector.distance(vNode, vPos) <= iRadius) then
+			for i, v in pairs(FORCED_LINKS) do
+				FORCED_LINKS[i][iCurrentNode] = nil
+			end
+			FORCED_LINKS[iCurrentNode] = nil
+			table.remove(self.RECORDED_NAVMESH, iCurrentNode)
 			iNodesRemoved = iNodesRemoved + 1
 		end
 		iCurrentNode = iCurrentNode + 1
 	until (not vNode or (iCurrentNode > iNodes))
+	
+	----------------
+	self:RemovePaintedNavmesh(true)
+	self:PaintNavmesh()
 	
 	----------------
 	PathFindLog("Forcefully removed %d nodes", iNodesRemoved)
@@ -998,6 +1040,38 @@ Pathfinding.SetRecordAll = function(self)
 	end
 	
 	PathFindLog("All-Player Recording: %s", (self.RECORDED_NAVMESH_ALL and "Started" or "Paused"))
+	
+end
+
+-------------------
+-- Pathfinding.ForceLinkNodes
+
+Pathfinding.ForceLinkNodes = function(self, idArg)
+	local iNodeA = self.FORCED_LINK_TEMP_A
+	local iNodeB = self.FORCED_LINK_TEMP_B
+	local vPos = g_localActor:GetPos()
+	local vClosest, iClosest = self:GetClosestPoint(vPos)
+	
+	if (not iNodeA or (idArg == "r1")) then
+		self.FORCED_LINK_TEMP_A = iClosest
+		PathFindLog("Node 1 Selected: %d", iClosest)
+	elseif (not iNodeB or (idArg == "r2")) then
+		if (iNodeA == iClosest) then
+			PathFindLog("Please Select a Different Node: %d", iClosest)
+		else
+			self.FORCED_LINK_TEMP_B = iClosest
+			PathFindLog("Node 2 Selected: %d", iClosest)
+		end
+	else
+		if (not FORCED_LINKS[iNodeA]) then
+			FORCED_LINKS[iNodeA] = { } end
+			
+		FORCED_LINKS[iNodeA][iNodeB] = true
+		PathFindLog("Forcefully Linked nodes %d and %d", iNodeA, iNodeB)
+		
+		self.FORCED_LINK_TEMP_A = nil
+		self.FORCED_LINK_TEMP_B = nil
+	end
 	
 end
 
@@ -1233,6 +1307,19 @@ Pathfinding.ExportNavmesh = function(self, aNodes)
 		end
 	end
 	
+	hFile:write("}\n")
+	hFile:write("\n")
+	hFile:write("------------------------\n")
+	hFile:write("NAVMESH_FORCED_LINKS = {\n")
+	for iNode, aLinks in pairs(FORCED_LINKS) do
+		if (table.count(aLinks) > 0) then
+			hFile:write(string.format("\t[%d] = {\n", iNode))
+			for iLink, hLinked in pairs(aLinks) do
+				hFile:write(string.format("\t\t[%d] = %s,\n", iLink, tostring(hLinked)))
+			end
+			hFile:write("\t},\n")
+		end
+	end
 	hFile:write("}\n")
 	hFile:write("\n")
 	hFile:write("---------------\n")

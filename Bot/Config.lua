@@ -16,7 +16,10 @@ Config = {
 	ServerList = { };
 	
 	-- Name of the current server
-	CurrentServer = "127.0.0.1:66666:2020";
+	CurrentServer = "116.203.92.129:50002"; -- tox PS
+	CurrentServer = "116.203.92.129:55001"; -- atom 
+	CurrentServer = "116.203.92.129:50001"; -- tox IA
+	CurrentServer = "127.0.0.1:66666:2020"; -- local
 	
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers
@@ -44,6 +47,13 @@ Config = {
 	
 	-- Time between each melee attacks
 	MeleeDelay = 0.5;
+	
+	----------------------------------------------
+	-- If the bot will disarm (shoot) explosives
+	ShootExplosives = true;
+	
+	-- If the bot will use claymores and place them around spawns
+	ClaymoreMaster = true;
 	
 	----------------------------------------------
 	-- Blacklist for items
@@ -168,7 +178,10 @@ Config = {
 	PickupWeapons = true;
 	
 	-- list of weapons bot will consider worth picking up
-	PickableWeapons = {};
+	PickableWeapons = { ["SCAR"] = true, ["FY71"] = true, ["SMG"] = true, ["Shotgun"] = true };
+	
+	-- list of weapons bot will ALWAYS consider worth picking up (so even when it always has a proper gun)
+	PickableGucciWeapons = { ["GaussRifle"] = true, ["Hurricane"] = true };
 
 	----------------------------------------------
 	-- the skill set of the bot (-1 = worst, 4 = hacker)

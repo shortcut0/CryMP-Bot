@@ -265,6 +265,11 @@ FinchPower = {
 			return false end
 			
 		-----------------------
+		bOk, hLib = self:LoadFile(sLibPath .. "\\timer.utils.lua")
+		if (not bOk) then
+			return false end
+			
+		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\vector.utils.lua")
 		if (not bOk) then
 			return false end
@@ -326,7 +331,7 @@ FinchPower = {
 
 		-----------------------
 		if (Config.ZombieQuit ~= nil) then
-			self.RECONNECT_TRIES = Config.ZombieQuit end	
+			self.ZOMBIE_QUIT = Config.ZombieQuit end	
 
 		-----------------------
 		local sServer = Config.CurrentServer
