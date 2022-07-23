@@ -19,6 +19,8 @@ Config = {
 	CurrentServer = "116.203.92.129:50002"; -- tox PS
 	CurrentServer = "116.203.92.129:55001"; -- atom 
 	CurrentServer = "116.203.92.129:50001"; -- tox IA
+	CurrentServer = "116.203.92.129:64087"; -- something
+	CurrentServer = "116.203.92.129:64088"; -- something_pro
 	CurrentServer = "127.0.0.1:66666:2020"; -- local
 	
 	----------------------------------------------
@@ -54,6 +56,9 @@ Config = {
 	
 	-- If the bot will use claymores and place them around spawns
 	ClaymoreMaster = true;
+	
+	-- If the bot will use c4 and and blow up nearby players
+	C4Master = true;
 	
 	----------------------------------------------
 	-- Blacklist for items
@@ -168,6 +173,20 @@ Config = {
 	PathRandomizing_Max = 20; -- cm
 	
 	----------------------------------------------
+	-- the lean amount for all players (0.25 default)
+	LeanAmount = 0.5; -- 0.5 to counter leaning players
+	
+	----------------------------------------------
+	-- time between change of combat move direction
+	CombatMovementChangeTimer = 0.8;
+	
+	-- the distance to run during combat movment (left or right)
+	CombatMovementDistance = 1.5;
+	
+	-- if bots will randomly prone during combat movement
+	CombatMovementProne = true;
+	
+	----------------------------------------------
 	-- if true, bot will throw grenades
 	UseGrenades = true;
 	
@@ -196,7 +215,7 @@ Config = {
 	
 	----------------------------------------------
 	-- Bot aim config
-	AimBone = "head"; -- can be 'random' for random bone, invalid bone names will be overwritten by 'Pelvis'
+	AimBone = "neck"; -- can be 'random' for random bone, invalid bone names will be overwritten by 'Pelvis'
 	
 	----------------------------------------------
 	-- CVars that will be set when bot entered the server

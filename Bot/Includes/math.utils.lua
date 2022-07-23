@@ -64,6 +64,19 @@ math.fits = function(target, number)
 end;
 
 ---------------------------
+-- math.loopindex
+
+math.loopindex = function(num, target)
+	local f = num / target
+	if (target > num or f < 1) then
+		return { 0, num }
+	end
+	local fits = string.gsub(f, "%.(.*)", "")
+	local rem = num - (fits * target)
+	return { fits, rem }
+end;
+
+---------------------------
 -- math.calctime
 
 math.calctime = function(s)

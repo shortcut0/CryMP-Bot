@@ -272,6 +272,9 @@ BotNavigation.Update = function(self)
 	self.CURRENT_PATH_POS = hCurrentNode
 		
 	----------------
+	self:Log(4, "Current Path Goal: %s (isPlayer: %s)", (self.CURRENT_PATH_TARGET and self.CURRENT_PATH_TARGET.class or "<null>"), (self.CURRENT_PATH_PLAYER and "Yes" or "No"))
+		
+	----------------
 	return bReturn
 end
 
@@ -333,15 +336,19 @@ BotNavigation.LogError = function(self, iVerbosity, ...)
 
 BotNavigation.CanCircleJumpOnCurrentPath = function(self)
 
+	--------------
 	if (self.CURRENT_PATH_NODE_ABOVE) then
 		return false end
 	
+	--------------
 	if (self.CURRENT_PATH_NODE_ABOVE_TERRAIN) then
 		return false end
 	
+	--------------
 	if (not self.IsInOpenSpace()) then
 		return false end
 		
+	--------------
 	return true
 end
 

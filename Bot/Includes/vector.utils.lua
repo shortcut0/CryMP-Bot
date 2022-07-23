@@ -88,6 +88,26 @@ vector.make = function(iX, iY, iZ, vReturn)
 end
 
 ---------------------------
+-- vector.amake
+
+vector.amake = function(a, vReturn)
+	
+	if (not isArray(a)) then
+		return a end
+	
+	local vNew = {
+		x = checkNumber(a[1], 0),
+		y = checkNumber(a[2], 0),
+		z = checkNumber(a[3], 0)
+	}
+	
+	if (vReturn) then
+		vReturn = vNew end
+	
+	return vNew
+end
+
+---------------------------
 -- vector.type
 
 vector.type = function(v)
@@ -382,6 +402,32 @@ vector.distance2d = function(v1, v2)
 	
 	------------------
 	return math.sqrt(iX * iX + iY * iY)
+end
+
+---------------------------
+-- vector.rotate_90z 
+
+vector.rotate_90z = function(v)
+
+	------------------
+	if (not vector.isvector(v)) then
+		return v end
+
+	------------------
+	return VecRotate90_Z(v)
+end
+
+---------------------------
+-- vector.rotate_minus90z
+
+vector.rotate_minus90z = function(v)
+
+	------------------
+	if (not vector.isvector(v)) then
+		return v end
+
+	------------------
+	return VecRotateMinus90_Z(v)
 end
 
 

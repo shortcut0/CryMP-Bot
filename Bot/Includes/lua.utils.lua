@@ -108,6 +108,18 @@ luautils.checkNumber = function(iNumber, iDefault)
 	return iNumber
 end
 
+---------------------------
+-- luautils.checkVar
+
+luautils.checkVar = function(sVar, hDefault)
+
+	-------------
+	if (isNull(sVar)) then
+		return hDefault end
+	-------------
+	return sVar
+end
+
 -------------------
 getrandom = luautils.random
 isNull = luautils.isNull
@@ -118,6 +130,7 @@ isfunction = luautils.isfunction
 isEntityId = luautils.isEntityId
 fileexists = luautils.fileexists
 checkNumber = luautils.checkNumber
+checkVar = luautils.checkVar
 
 -------------------
 return luautils

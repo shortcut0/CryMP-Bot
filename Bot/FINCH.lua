@@ -45,6 +45,11 @@ if (loadstring == nil) then
 	loadstring = load end
 
 -------------------------------
+FinchLogNotFmt = function(msg)
+	return System.LogAlways("$9[$7FinchPower$9] " .. tostring(msg))
+end
+
+-------------------------------
 FinchLog = function(msg, ...)
 	local msg = msg
 	if (...) then
@@ -183,6 +188,10 @@ FinchPower = {
 			return false end
 		
 		-------------------
+		if (not self:CheckBot()) then
+			return false end
+		
+		-------------------
 		self:MoveLogs('Bot Build%((%d+)%) Date%((%d+) (%w+) (%d+)%) Time%((%d+) (%d+) (%d+)%)%.log');
 		
 		-------------------
@@ -193,6 +202,16 @@ FinchPower = {
 		
 		-------------------
 		return true
+	end,
+	------------------------------
+	CheckBot = function(self)
+	
+		if (not BOT_CONNECTED) then
+			return false end
+	
+		if (not BOT_LOADED) then
+			self:LoadBotFile()
+		end
 	end,
 	------------------------------
 	AddCommands = function(self)
@@ -296,6 +315,11 @@ FinchPower = {
 			
 		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\simplehash.lua")
+		if (not bOk) then
+			return false end
+			
+		-----------------------
+		bOk, hLib = self:LoadFile(sLibPath .. "\\crypt.utils.lua")
 		if (not bOk) then
 			return false end
 			
@@ -642,9 +666,10 @@ FinchPower = {
 				end;
 			end;
 			------------------------------------
-			OnShoot = function(self, weapon, player, pos)
+			OnShoot = function(self, weapon, player, pos, dir)
+				-- FinchLog("Fired")
 				if(Bot and Bot.OnShoot)then
-					self:SafeCall(Bot.OnShoot, Bot, player, weapon, pos, isBot);
+					self:SafeCall(Bot.OnShoot, Bot, player, weapon, pos, dir, (player.id == g_localActorId));
 				end;
 			end;
 			------------------------------------
@@ -687,6 +712,9 @@ FinchPower = {
 			end;
 			------------------------------------
 			OnBotDisconnect = function(self, player, reason)
+			
+				FinchPower:OnDisconnect()
+					
 				if (Bot and Bot.OnBotDisconnect) then
 					self:SafeCall(Bot.OnBotDisconnect, Bot, player, channelId) end
 					
@@ -871,7 +899,9 @@ FinchPower = {
 	end;
 	------------------------------
 	IsServerProbablyOffline = function(self, r)
-		return (string.match(r, "Connection attempt to ((%d+)%.(%d+)%.(%d+)%.(%d+):(%d+)) failed"))
+		return 
+			(string.match(r, "Connection attempt to ((%d+)%.(%d+)%.(%d+)%.(%d+):(%d+)) failed") or
+			string.match(r, "Connection attempt to (.*):(%d+)) failed"))
 	end;
 	------------------------------
 	IsInvalidPassword = function(self, r)
@@ -887,6 +917,12 @@ FinchPower = {
 		return false
 	end;
 	------------------------------
+	OnDisconnect = function(self)
+	
+		BOT_CONNECTED = false
+		
+	end,
+	------------------------------
 	OnPreConnect = function(self)
 	
 		if (g_localActor.ON_CONNECTED) then
@@ -896,23 +932,32 @@ FinchPower = {
 		FinchPower:OnConnected(player)
 	end,
 	------------------------------
+	LoadBotFile = function(self)
+	
+		---------------------
+		FinchLog("Loading Bot File")
+			
+		---------------------
+		BOT_LOADED = self:LoadBotCore()
+	end,
+	------------------------------
 	OnConnected = function(self, player)
 	
-		self.lastReload = _time;
+		self.lastReload = _time
 	
 		---------------------
-		INGAME = true;
-		_Connected = false;
-		LAST_ACTOR = player;
+		BOT_CONNECTED = true
+	
+		---------------------
+		INGAME = true
+		_Connected = false
+		LAST_ACTOR = player
 			
 		---------------------
-		FinchLog("Loading Bot File");
+		self:LoadBotFile()
 			
 		---------------------
-		self:LoadBotCore();
-			
-		---------------------
-		FinchLog("Patching Game Rules");
+		FinchLog("Patching Game Rules")
 			
 		---------------------
 		if (player and player.OnEnteredServer) then 
@@ -1055,12 +1100,12 @@ FinchPower = {
 		System.ExecuteCommand("exec Bot\\Core\\InitBot.cfg"); -- execute bot configuration file 
 		
 		if(not self:FinchLoadFile())then
-			return self:FinchError(not _reload and Config.System) end
+			return false, self:FinchError(not _reload and Config.System) end
 			
 		if(not Bot)then
-			return self:FinchError(not _reload and Config.System) end
+			return false, self:FinchError(not _reload and Config.System) end
 			
-		FinchLog("Bot was loaded Successfully!");
+		return true, FinchLog("Bot was loaded Successfully!");
 	end;
 	------------------------------
 	PreConnect = function(self)
@@ -1115,7 +1160,12 @@ FinchPower = {
 		FinchLog("Connecting ...");
 		
 		----------------------------
-		if (force or (not g_gameRules and not _Connected)) then
+		local bConnect = force
+		if (not bConnect) then
+			bConnect = (not g_gameRules and not _Connected) end
+			
+		----------------------------
+		if (bConnect) then
 			FinchLog("Connecting to " .. I_PEE_PORT .. " *= " .. SERVER_PASSWORT);
 			Script.SetTimer(5000, function()
 				_Connected = true;
@@ -1125,7 +1175,7 @@ FinchPower = {
 			_LAST_CONNECT = _time; -- when did we last try to connect?
 			
 		elseif (g_gameRules) then
-			self:LoadBotCore(); -- load finch into the memory
+			BOT_LOADED = self:LoadBotCore(); -- load finch into the memory
 		end
 		
 		----------------------------

@@ -189,6 +189,28 @@ table.count = function(t, pred)
 end
 
 ---------------------------
+-- table.countRec
+
+table.countRec = function(t, pred)
+
+	if (not table.isarray(t)) then
+		return 0
+	end
+
+	local iCount = 0
+	for _, v in pairs(t) do
+		if (pred == nil or pred(v)) then
+			if (table.isarray(v)) then
+				iCount = iCount + table.countRec(v, pred)
+			else
+				iCount = iCount + 1
+			end
+		end
+	end
+	return iCount
+end
+
+---------------------------
 -- table.removeWithPredicate
 
 table.removeWithPredicate = function(t, pred)
@@ -359,6 +381,7 @@ arrayutils.popLast = table.popLast
 arrayutils.iselect = table.iselect
 arrayutils.lookupk = table.lookupk
 arrayutils.isarray = table.isarray
+arrayutils.countRec = table.countRec
 arrayutils.tostring = table.tostring
 arrayutils.popFirst = table.popFirst
 arrayutils.contains = table.contains

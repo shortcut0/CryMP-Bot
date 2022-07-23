@@ -45,10 +45,17 @@ end
 timer.sleep = function(iMs)
 
 	-----------
+	if (not isNumber(iMs)) then
+		return end
+
+	-----------
+	local iMs = (iMs / 1000)
+
+	-----------
 	local hSleepStart = timer.init()
 	repeat
 		-- sleep well <3
-	until (timer.diff(hSleepStart) > iMs)
+	until (timer.expired(hSleepStart, iMs))
 end
 
 ---------------------------
@@ -59,12 +66,19 @@ timer.sleep_call = function(iMs, fCall, ...)
 	-----------
 	if (not fCall) then
 		return timer.sleep(iMs) end
+
+	-----------
+	if (not isNumber(iMs)) then
+		return end
+
+	-----------
+	local iMs = (iMs / 1000)
 	
 	-----------
 	local hSleepStart = timer.init()
 	repeat
 		-- sleep well <3
-	until ((iMs ~= -1 and (timer.diff(hSleepStart) > iMs)) or (fCall(...) == true))
+	until ((iMs ~= -1 and (timer.expired(hSleepStart, iMs))) or (fCall(...) == true))
 end
 
 

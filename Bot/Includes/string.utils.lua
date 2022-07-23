@@ -404,7 +404,7 @@ end
 -- NOTE: this is WIP!
 
 string.hexencode = function(str)
-   return "0x" .. (str:gsub(".", function(char) return string.format("%2x", char:byte()) end)):upper()
+   return "0x" .. string.gsub((string.gsub(str, ".", function(char) return string.format("%2x", char:byte()) end)):upper(), " ", 0)
 end
 
 ---------------------------
@@ -426,21 +426,98 @@ string.fileread = function(sPath)
 	if (not hFile) then
 		return end
 		
+	---------
 	local sData = hFile:read"*all"
 	hFile:close()
 	
+	---------
 	return sData
+end
+
+---------------------------
+-- string.left
+
+string.left = function(sString, iLeft)
+
+	---------
+	if (not iLeft) then
+		return "" end
+		
+	---------
+	local sLeft = string.sub(sString, 1, iLeft)
+	return sLeft
+end
+
+---------------------------
+-- string.right
+
+string.right = function(sString, iRight)
+
+	---------
+	if (not iRight) then
+		return "" end
+		
+	---------
+	local iLen = string.len(sString)
+	local sRight = string.sub(sString, (iLen - iRight) + 1, iLen)
+	return sRight
+end
+
+---------------------------
+-- string.trimleft
+
+string.trimleft = function(sString, iLeft)
+
+	---------
+	if (not iLeft) then
+		return sString end
+		
+	---------
+	return string.sub(sString, (iLeft + 1))
+end
+
+---------------------------
+-- string.trimright
+
+string.trimright = function(sString, iRight)
+
+	---------
+	if (not iRight) then
+		return sString end
+		
+	---------
+	return string.sub(sString, 1, string.len(sString) - iRight)
 end
 
 ---------------------------
 -- string.fileread
 
 string.bytestring = function(sString)
+
+	---------
 	local sByte = ""
 	for i, v in pairs(string.split(sString, "")) do
 		sByte = sByte .. string.byte(v) end
 		
+	---------
 	return sByte
+end
+
+---------------------------
+-- string.tobytes
+
+string.tobytes = function(sString)
+	
+	---------
+	local aBytes = {}
+	
+	---------
+	string.gsub(sString, ".", function(sChar) 
+		table.insert(aBytes, string.byte(sChar)) 
+	end)
+
+	---------
+	return aBytes
 end
 
 
