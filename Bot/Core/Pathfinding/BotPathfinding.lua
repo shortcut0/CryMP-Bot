@@ -113,6 +113,7 @@ Pathfinding.InitCVars = function()
 		{ "test3",       		"Pathfinding:Test3()",   				"Tests the Pathfinding System" },
 		{ "test4",       		"Pathfinding:Test4(%%)",   				"Tests the Pathfinding System" },
 		{ "test5",       		"Pathfinding:Test5()",   				"Tests the Pathfinding System" },
+		{ "test6",       		"Pathfinding:Test6()",   				"Tests the Pathfinding System" },
 		{ "test_live",  		"Pathfinding:LivePathfindingTest(%1)", 	"Tests the Pathfinding System with real time tests" },
 		
 		---------------
@@ -182,6 +183,7 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 	BOT_NAVMESH = nil
 	FORCED_LINKS = {}
 	AI_ACTION_POINTS = {}
+	self.VALIDATION_FUNC = function() end
 		
 	------------
 	if (not aNavmesh) then
@@ -192,6 +194,10 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 	end
 	
 	------------
+	if (not isArray(BOT_NAVMESH)) then
+		return PathFindLog("No Navmesh found!") end
+	
+	------------
 	PathFindLog("Vector Type is %s", vector.type(BOT_NAVMESH[1]))
 	
 	------------
@@ -200,23 +206,23 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 		
 	------------
 	local fRayCheck_P = Physics.RayTraceCheck
-	if (not luautils.isfunction(fRayCheck_P)) then
+	if (not luautils.isFunction(fRayCheck_P)) then
 		return false end
 		
 	------------
 	local fRayCheck_S = System.RayTraceCheck
-	if (not luautils.isfunction(fRayCheck_S)) then
+	if (not luautils.isFunction(fRayCheck_S)) then
 		return false end
 	
 	------------
 	self.VALIDATION_FUNC = function(vSrc, vTgt, iP2, iP3)
 		-- or fRayCheck_P(vSrc, vector.modify(vTgt, "z", 0.25, true), iP2, iP3) or fRayCheck_P(vector.modify(vSrc, "z", 0.25, true), vTgt, iP2, iP3)
 		local bVisible = 
-			fRayCheck_P(vSrc, vTgt, iP2, iP3) or
+			fRayCheck_P(vector.modify(vSrc, "z", 0.15, true), vector.modify(vTgt, "z", 0.15, true), iP2, iP3) or
 			fRayCheck_P(vSrc, vector.modify(vTgt, "z", 0.25, true), iP2, iP3) or
 			fRayCheck_P(vector.modify(vSrc, "z", 0.25, true), vTgt, iP2, iP3) or
-			fRayCheck_P(vector.modify(vSrc, "z", 0.25, true), vector.modify(vTgt, "z", 0.25, true), iP2, iP3) or
-			fRayCheck_S(vSrc, vTgt, 1, 1)
+			fRayCheck_P(vector.modify(vSrc, "z", 0.25, true), vector.modify(vTgt, "z", 0.25, true), iP2, iP3)
+			--fRayCheck_S(vSrc, vTgt, 1, 1)
 			
 		return ( bVisible )
 	end
@@ -376,8 +382,12 @@ Pathfinding.RefineValidatedLinks = function(self, aNavmesh)
 						local vHit = self.GetRayHitPosition(vPos_A, vDir, 9999)
 						
 						local bBehind = self:CompareNodes3(vPos_A, vPos_B, vHit)
+						
+						local iHitDist = 0
+						if (vHit) then
+							iHitDist = vector.distance(vHit, vPos_A) end
 
-						if ((not vHit) or bBehind or not vector.compare(vDir, vector.getdir(vPos_B, vHit, true, -1))) then-- or self:IsNodeBehind(vPos_B, vPos_A, vector.scale(vDir, -1)))) then
+						if ((iHitDist < 25 and not vHit) or (iHitDist < 25 and bBehind) or (iHitDist < 25 and not vector.compare(vDir, vector.getdir(vPos_B, vHit, true, -1)))) then-- or self:IsNodeBehind(vPos_B, vPos_A, vector.scale(vDir, -1)))) then
 							aNavmesh[iNode].links[iOtherNode] = true
 							aNavmesh[iOtherNode].links[iNode] = true
 						
@@ -808,6 +818,24 @@ Pathfinding.Test5 = function(self)
 end
 
 ---------------------------------------------
+-- Pathfinding.Test6
+
+Pathfinding.Test6 = function(self)
+	
+	local vClosest, iClosest = self:GetClosestPoint(g_localActor:GetPos())
+	PathFindLog("Closest Node: %d", checkNumber(iClosest, -1))
+	PathFindLog("		Links: %d", vClosest.links)
+	for iLinked, bLinked in pairs(self.VALIDATED_NAVMESH[iClosest].links) do
+		local bVisible = self.VALIDATION_FUNC(vClosest, self.VALIDATED_NAVMESH[iLinked].pos, NULL_ENTITY, NULL_ENTITY)
+		if (not bVisible) then
+			self:Effect(self.VALIDATED_NAVMESH[iLinked].pos, 1)
+			PathFindLog("		[%d]Visible: %s", iLinked, string.bool(bVisible))
+		end
+	end
+	self:Effect(vClosest)
+end
+
+---------------------------------------------
 -- Pathfinding.Test
 
 Pathfinding.Test = function(self, idClassOrEntity)
@@ -884,7 +912,7 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 		
 	-----------------
 	if (not vClosest) then
-		return { } end
+		return nil end
 		
 	local aClosest = self.VALIDATED_NAVMESH[iClosest]
 	
@@ -895,7 +923,7 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 		
 	-----------------
 	if (not vGoal) then
-		return { } end
+		return nil end
 		
 	local aGoal = self.VALIDATED_NAVMESH[iGoal]
 	
@@ -903,7 +931,7 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 	local iStartTime = os.clock()
 	
 	-----------------
-	aPath = astar.path(aClosest, aGoal, self.VALIDATED_NAVMESH, false, function(node, neighbor)
+	aPath = astar.path(aClosest, aGoal, self.VALIDATED_NAVMESH, true, function(node, neighbor)
 		return node.links[neighbor.id] == true
 	end)
 	
@@ -979,7 +1007,7 @@ Pathfinding.GetClosestVisiblePoint = function(self, vSource, pred)
 	for i, v in pairs(self.VALIDATED_NAVMESH) do
 		if (pred == nil or pred(vSource, v.pos) == true) then
 			local iDistance = vector.distance(v.pos, vSource)
-			if ((iDistance < aClosest[3] or aClosest[3] == -1) and self.CanSeeNode(vSource, v.pos)) then
+			if ((iDistance < aClosest[3] or aClosest[3] == -1) and (BotNavigation:IsNodeVisible(vSource, true))) then --or self.CanSeeNode(vSource, v.pos))) then
 				aClosest = { v.pos, i, iDistance }
 			end
 		end
@@ -1208,6 +1236,13 @@ Pathfinding.MergeNavmesh = function(self)
 	----------------
 	local iMerged = 0
 	for i, vNode in pairs(BOT_NAVMESH) do
+		iMerged = iMerged + 1
+		self.RECORDED_NAVMESH[i] = vNode
+	end
+	
+	--------------
+	-- table.append(self.RECORDED_NAVMESH, aMerged)
+	-- for i, vNode in pairs(BOT_NAVMESH) do
 			
 		--[[
 		----------------
@@ -1224,14 +1259,14 @@ Pathfinding.MergeNavmesh = function(self)
 		end
 		--]]
 	
-		if (not Pathfinding.IsNodesInRadius(vNode, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH)) then
-			table.insert(aMerged, vNode)
-			iMerged = iMerged + 1
-		end
-	end
+		-- if (not Pathfinding.IsNodesInRadius(vNode, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH)) then
+			-- table.insert(aMerged, vNode)
+			-- iMerged = iMerged + 1
+		-- end
+	-- end
 	
-	----------------
-	table.append(self.RECORDED_NAVMESH, aMerged)
+	--------------
+	-- table.append(self.RECORDED_NAVMESH, aMerged)
 	
 	----------------
 	PathFindLog("Added %d new Nodes to Navmesh", iMerged)
@@ -1292,7 +1327,11 @@ Pathfinding.ForceLinkNodes = function(self, idArg)
 		if (not FORCED_LINKS[iNodeA]) then
 			FORCED_LINKS[iNodeA] = { } end
 			
+		if (not FORCED_LINKS[iNodeB]) then
+			FORCED_LINKS[iNodeB] = { } end
+			
 		FORCED_LINKS[iNodeA][iNodeB] = true
+		FORCED_LINKS[iNodeB][iNodeA] = true
 		PathFindLog("Forcefully Linked nodes %d and %d", iNodeA, iNodeB)
 		
 		self.FORCED_LINK_TEMP_A = nil
@@ -1408,6 +1447,9 @@ Pathfinding.RecordPlayerMovement = function(self, aActor)
 					
 					FORCED_LINKS[iCurrent][iPrevius] = true
 					FORCED_LINKS[iPrevius][iCurrent] = true
+					
+					self:Effect(vPos, 1)
+					self:Effect(self.RECORDED_NAVMESH[iPrevius], 1)
 				else
 					PathFindLog("NOT linking, OUT of RANGE ! %f", iDistance)
 				end
@@ -1515,8 +1557,8 @@ end
 -------------------
 -- Pathfinding.Effect
 
-Pathfinding.Effect = function(self, vPos)
-	Particle.SpawnEffect("explosions.flare.a", vPos, vectors.up, 0.1)
+Pathfinding.Effect = function(self, vPos, iScale)
+	Particle.SpawnEffect("explosions.flare.a", vPos, vectors.up, checkNumber(iScale, 0.1))
 end
 
 

@@ -13,9 +13,9 @@ luautils = {
 }
 
 ---------------------------
--- luautils.isfunction
+-- luautils.isFunction
 
-luautils.isfunction = function(hParam)
+luautils.isFunction = function(hParam)
 	return type(hParam) == "function"
 end
 
@@ -48,6 +48,13 @@ luautils.isNull = function(hParam)
 end
 
 ---------------------------
+-- luautils.isDead
+
+luautils.isDead = function(hParam)
+	return (isNumber(hParam) and hParam == 0xDEAD)
+end
+
+---------------------------
 -- luautils.isEntityId
 
 luautils.isEntityId = function(hParam)
@@ -76,7 +83,14 @@ end
 luautils.random = function(min, max, floor)
 	-------------
 	if (isArray(min)) then
-		return min[math.random((max or table.count(min)))]
+		if (max and isFunction(max) and table.count(min) > 1) then
+			for i, hVal in pairs(table.shuffle(min)) do
+				if (max(hVal) == true) then
+					return hVal
+				end
+			end
+		else
+			return min[math.random((max or table.count(min)))] end
 	end
 	
 	-------------
@@ -109,6 +123,23 @@ luautils.checkNumber = function(iNumber, iDefault)
 end
 
 ---------------------------
+-- luautils.compNumber
+
+luautils.compNumber = function(iNumber, iGtr)
+
+	-------------
+	if (not isNumber(iNumber)) then
+		return false end
+
+	-------------
+	if (not isNumber(iGtr)) then
+		return false end
+		
+	-------------
+	return (iNumber >= iGtr)
+end
+
+---------------------------
 -- luautils.checkVar
 
 luautils.checkVar = function(sVar, hDefault)
@@ -123,14 +154,16 @@ end
 -------------------
 getrandom = luautils.random
 isNull = luautils.isNull
+isDead = luautils.isDead
 isArray = luautils.isArray
 isString = luautils.isString
 isNumber = luautils.isNumber
-isfunction = luautils.isfunction
+isFunction = luautils.isFunction
 isEntityId = luautils.isEntityId
 fileexists = luautils.fileexists
 checkNumber = luautils.checkNumber
 checkVar = luautils.checkVar
+compNumber = luautils.compNumber
 
 -------------------
 return luautils

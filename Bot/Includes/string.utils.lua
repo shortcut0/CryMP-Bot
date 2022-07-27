@@ -124,8 +124,8 @@ string.getval = function(sVal, bNoHandleMethod)
 		handle:close()
 	else
 		-- The shitty approach
-		local sFile = string.makefilename("_proc_out_temp.txt")
-		os.execute(sVal .. " > \"" .. sFile .. "\"")
+		local sFile = string.makefilename("temp_read")
+		os.execute(sVal .. " >> \"" .. sFile .. "\"")
 		local hFile = io.open(sFile, "r")
 		sResult = hFile:read"*all"
 		hFile:close()
@@ -520,11 +520,51 @@ string.tobytes = function(sString)
 	return aBytes
 end
 
+---------------------------
+-- string.bool
+
+string.bool = function(bOk, sYes, sNo)
+	
+	---------
+	local sYes = checkVar(sYes, "true")
+	local sNo = checkVar(sNo, "false")
+
+	---------
+	return (bOk == true and sYes or sNo)
+end
+
+---------------------------
+-- string.stripws
+
+string.stripws = function(sString)
+	
+	---------
+	if (isNull(sString)) then
+		return "" end
+	
+	---------
+	return string.gsub(sString, "%s", "")
+end
+
+---------------------------
+-- string.empty
+
+string.empty = function(sString)
+	
+	---------
+	if (isNull(sString)) then
+		return true end
+		
+	---------
+	return (string.stripws(sString) == "")
+end
+
 
 -------------------
 stringutils.hex = string.hex
 stringutils.new = string.new
 stringutils.cut = string.cut
+stringutils.empty = string.empty
 stringutils.clean = string.clean
 stringutils.valid = string.valid
 stringutils.split = string.split
@@ -534,6 +574,7 @@ stringutils.mspace = string.mspace
 stringutils.lspace = string.lspace
 stringutils.getdir = string.getdir
 stringutils.reverse = string.reverse
+stringutils.stripws = string.stripws
 stringutils.getchars = string.getchars
 stringutils.fileread = string.fileread
 stringutils.openfile = string.openfile

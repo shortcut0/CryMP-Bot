@@ -574,191 +574,27 @@ FinchPower = {
 	end;
 	------------------------------
 	CreateAPI = function(self)
-		BotAPI = {
-			------------------------------------
-			defaultClStartWorking = function(self, entityId, workName)
-				self.work_type = workName
-				self.work_name = "@ui_work_" .. workName
-				HUD.SetProgressBar(true, 0, self.work_name)
-			end;
-			------------------------------------
-			defaultClStepWorking = function(self, amount)
-				HUD.SetProgressBar(true, amount, self.work_name or "")
-			end;
-			------------------------------------
-			defaultClStopWorking = function(self, entityId, complete)
-				HUD.SetProgressBar(false, -1, "")
-			end;
-			------------------------------------
-			connectingPlayers = {};
-			------------------------------------
-			OnTimer = function(self, timerTime)
-				if(Bot and Bot.PreOnTimer)then
-					Bot:PreOnTimer(timerTime)
-				end
-				
-				FinchPower:Wait()
-			end;
-			------------------------------------
-			PatchExploits = function(self)
-				if(nCX)then
-					nCX = nil;
-				end;
-				RPC_STATE = false;
-				RPC = {};
-				if(g_gameRules)then
-					if(not g_gameRules.server.oldRequestSpectatorTarget)then
-						g_gameRules.server.oldRequestSpectatorTarget = g_gameRules.server.RequestSpectatorTarget;
-						g_gameRules.server.RequestSpectatorTarget = function(self, id, mode)	
-							if(mode > 3 and mode ~= 111)then
-								FinchLog("Spectator Target Blocked >> " .. mode);	
-							end;
-							return g_gameRules.server.oldRequestSpectatorTarget(self, id, mode);
-						end;
-					end;
-					g_gameRules.Client.ClStartWorking = self.defaultClStartWorking;
-					g_gameRules.Client.ClStopWorking = self.defaultClStopWorking;
-				end;
-			end;
-			------------------------------------
-			OnUpdate = function(self, frameTime) -- on frame
-				if(Config and not Config.System)then
-					return;
-				end;
-
-				self:DoUpdate(frameTime);
-			end;
-			------------------------------------
-			DoUpdate = function(self, frameTime)
-			
-				if(Bot and Bot.PreUpdate)then
-					Bot:PreUpdate(frameTime)
-				end
-				
-				self:PatchExploits()
-				
-				for i, aInfo in pairs(self.connectingPlayers or{}) do
-					if (System.GetEntity(i)) then
-						if(g_localActor)then
-							if(aInfo.entity.id == g_localActor.id)then
-								_reload = false;
-								self.connectingPlayers[i] = nil;
-							elseif(Bot)then
-								self:SafeCall(Bot.OnPlayerConnected, Bot, aInfo.entity, aInfo.channelId);
-								self.connectingPlayers[i] = nil;
-							end;
-						end;
-					else
-						self.connectingPlayers[i] = nil;
-					end;
-				end;
-			end;
-			------------------------------------
-			OnRevive = function(self, channelId, player, isBot) -- when received phys profile "alive" from server
-				if(Bot and Bot.OnRevive)then
-					self:SafeCall(Bot.OnRevive, Bot, player, isBot, channelId);
-				end;
-			end;
-			------------------------------------
-			OnJump = function(self, channelId, player, isBot)
-				if(Bot and Bot.OnPlayerJump)then
-					self:SafeCall(Bot.OnPlayerJump, Bot, player, isBot, channelId);
-				end;
-			end;
-			------------------------------------
-			OnShoot = function(self, weapon, player, pos, dir)
-				-- FinchLog("Fired")
-				if(Bot and Bot.OnShoot)then
-					self:SafeCall(Bot.OnShoot, Bot, player, weapon, pos, dir, (player.id == g_localActorId));
-				end;
-			end;
-			------------------------------------
-			OnPlayerInit = function(self, channelId, player, isBot) -- gameRules + g_localActor available
-			
-				if (not player) then
-					return end
-			
-				if(isBot)then
-					FinchPower:OnPreConnect()
-					
-				elseif(Bot and Bot.OnPlayerConnected)then
-					self:SafeCall(Bot.OnPlayerConnected, Bot, player, channelId);
-				end;
-			end;
-			------------------------------------
-			OnHit = function(self, hit)
-				if (Bot and Bot.PreOnHit) then
-					Bot:PreOnHit(hit) end
-			end;
-			------------------------------------
-			OnExplosion = function(self, explosion) -- Explosions near the bot
-				if (Bot and Bot.PreOnExplosion) then
-					Bot:PreOnExplosion(explosion) end
-			end;
-			------------------------------------
-			OnConnect = function(self, channelId, player)
-				self.connectingPlayers[player.id] = {
-					entity = player,
-					channelId = channelId
-				}
-			end;
-			------------------------------------
-			OnBotConnect = function(self, channelId, player)
-			end;
-			------------------------------------
-			OnPlayerDisconnect = function(self, channelId, player)
-				if (Bot and Bot.OnDisconnect) then
-					self:SafeCall(Bot.OnDisconnect, Bot, player, channelId) end
-			end;
-			------------------------------------
-			OnBotDisconnect = function(self, player, reason)
-			
-				FinchPower:OnDisconnect()
-					
-				if (Bot and Bot.OnBotDisconnect) then
-					self:SafeCall(Bot.OnBotDisconnect, Bot, player, channelId) end
-					
-				FinchPower:UninstallBot(reason)
-			end;
-			------------------------------------
-			OnBotConnectFailed = function(self, reason, info)
-				FinchPower:UninstallBot(info)
-			end;
-			------------------------------------
-			GetFunctionName = function(self, f)
-				if(f:find("%.") or f:find(":"))then
-					return end
-					
-				for i, v in pairs(_G or{}) do
-					if(v == f)then
-						return i end end
-
-				return
-			end;
-			------------------------------------
-			SafeCall = function(self, f, ...)
-				if(f ~= nil)then
-					local functionName = table.lookupRec(_G, f); -- Lookup in _G, not optimal !!
-					local s, e = pcall(f, ...);
-					if(not s)then
-						SetError("SafeCall failed to execute function " .. tostring(functionName), (e or "Possible Script Error"));
-						return FinchPower:FinchError(false);
-					end;
-					if(f == loadfile)then
-						s, e = pcall(e); -- load function
-						if(not s)then
-							SetError("SafeCall failed to load function " .. tostring(functionName), (e or "Possible Script Error"));
-							return FinchPower:FinchError(false);
-						end;
-					end;
-				else
-					SetError("Invalid function to SafeCall()", "function is nil");
-				end;
-			end;
-		};
 		
 		----------------------------
-		BotAPILog("API Initialized")
+		FinchLog("Initializing API")
+	
+		-----------------------
+		local sAPIPath = "Bot\\BotAPI.lua";
+		
+		-----------------------
+		local bOk, hLib = self:LoadFile(sAPIPath)
+		if (not bOk) then
+			return false end
+		
+		----------------------------
+		if (isNull(BotAPI)) then
+			return false end
+		
+		----------------------------
+		BotAPI:Init()
+		
+		----------------------------
+		FinchLog("API Initialized")
 		
 		-----------
 		return true
@@ -798,14 +634,6 @@ FinchPower = {
 		--------------------------
 		PowerStruggle.Client.ClSetupPlayer = function(self, playerId)
 			self:SetupPlayer(System.GetEntity(playerId)) 
-		end
-		
-		--------------------------
-		InstantAction.Client.OnDisconnect = function(self, c, reason) 
-		end
-		
-		--------------------------
-		PowerStruggle.Client.OnDisconnect = function(self, c, reason) 
 		end
 		
 		-----------
@@ -901,7 +729,7 @@ FinchPower = {
 	IsServerProbablyOffline = function(self, r)
 		return 
 			(string.match(r, "Connection attempt to ((%d+)%.(%d+)%.(%d+)%.(%d+):(%d+)) failed") or
-			string.match(r, "Connection attempt to (.*):(%d+)) failed"))
+			string.match(r, "Connection attempt to ((.*):(%d+)) failed"))
 	end;
 	------------------------------
 	IsInvalidPassword = function(self, r)
@@ -960,27 +788,33 @@ FinchPower = {
 		FinchLog("Patching Game Rules")
 			
 		---------------------
-		if (player and player.OnEnteredServer) then 
-			g_gameRules.server:RequestSpectatorTarget(g_localActor.id, 111) -- to idenfity bots
-			player:OnEnteredServer()
-		end
+		g_gameRules.server:RequestSpectatorTarget(g_localActor.id, 111) -- to idenfity bots
+		Bot:OnEnteredServer()
 			
 		---------------------
 		self:PatchGameRules()
 		Script.SetTimer(2500, function()
-			self:PatchGameRules() end)
+			FinchPower:PatchGameRules() end)
+			
+		---------------------
+		FinchLog("Game Rules Patched")
 	end;
 	------------------------------
 	ValidServer = function(self, IP)
+	
+		-----------
 		if (self.ignoreIpCheck) then
 			return true end
 			
+		-----------
 		local bValid, sStatus, iStatus = os.execute("ping -n 1 -w 8000 " .. IP);
 		FinchLog("Server Ping Result: IP = " .. IP .. ", Status = " .. tostring(bValid));
 		
+		-----------
 		if ((tostring(bValid) ~= "true" and tostring(bValid) ~= "0")) then
 			return false end
-			
+		
+		-----------
 		return true
 	end;
 	------------------------------
@@ -1147,6 +981,7 @@ FinchPower = {
 		----------------------------
 		local sCDKey = self.CD_KEY or "AAAAABBBBBCCCCCDDDDD"
 		if (self.GENERATE_CD_KEY) then
+			FinchLog("Generating Random CD-Key")
 			sCDKey = self:GenerateCDKey() end
 	
 		----------------------------
@@ -1167,8 +1002,10 @@ FinchPower = {
 		----------------------------
 		if (bConnect) then
 			FinchLog("Connecting to " .. I_PEE_PORT .. " *= " .. SERVER_PASSWORT);
+			FinchLog("CD-Key: %s", sCDKey);
 			Script.SetTimer(5000, function()
 				_Connected = true;
+				System.ExecuteCommand("net_set_cdkey " .. sCDKey);
 				System.ExecuteCommand("sv_password " .. SERVER_PASSWORT);
 				System.ExecuteCommand("connect " .. I_PEE_PORT); --localhost 50003"); --"); --116.203.92.129 55001");
 			end);
@@ -1193,10 +1030,11 @@ FinchPower = {
 	end;
 	------------------------------
 	GenerateCDKey = function(self)
-		local sKey = string.getval("includes\\truerandom.exe 25", true)
-		if (not sKey) then -- someone removed truerandom.exe ...
-		
+		local sKey = string.getval("Bot\\Includes\\truerandom.exe 25", true)
+		FinchLog("TrueRandom Generated CD-Key: '%s'", sKey)
+		if (not sKey or string.empty(sKey)) then -- someone removed truerandom.exe ...
 			sKey = simplehash.hash(string.getval("tasklist /NH /FO CSV", true), 6)
+			FinchLog("Hash-Generated CD-Key: '%s'", sKey)
 			--[[ -- WTF IS EVEN THIS ?
 			sKey = string.getval("tasklist /NH /FO CSV", true)
 			sKey = string.gsub(sKey, "\n", "")

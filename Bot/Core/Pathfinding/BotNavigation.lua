@@ -117,10 +117,21 @@ BotNavigation.InitCVars = function(self)
 end
 
 ---------------------------
+-- SetSleepTimer
+
+BotNavigation.SetSleepTimer = function(self, iTime)
+	self.SLEEP_TIMER = timerinit()
+	self.SLEEP_TIME = checkNumber(iTime, 1)
+end
+
+---------------------------
 -- Update
 
 BotNavigation.Update = function(self)
 	self:Log(5, "BotNavigation.Update()")
+	
+	----------------
+	local vPos = g_localActor:GetPos()
 	
 	----------------
 	local sRandomClass = self:GetRandomEntitiesForEnvironment()
@@ -129,15 +140,23 @@ BotNavigation.Update = function(self)
 	----------------
 	if (not self.CURRENT_PATH_NODE) then
 		self:Log(0, "No path found. regenerating")
+		if (not timerexpired(self.SLEEP_TIMER, self.SLEEP_TIME)) then
+			return end
+		
+		self.LAST_PATHGEN_FAILED = true
 		self:GetNewPath(sRandomClass)
+	else
+		self.LAST_PATHGEN_FAILED = false
 	end
 	
 	----------------
 	local aTarget = self:GetClosestAlivePlayer()
-	if (not self.CURRENT_PATH_IGNOREPLAYERS and aTarget ~= nil and (not self.CURRENT_PATH_PLAYER or self:CheckIfPlayerMoved(self.CURRENT_PATH_GOAL, self.CURRENT_PATH_TARGET))) then
-		if (self.CURRENT_PATH_TARGET ~= aTarget) then
-			self:Log(0, "Found alive player. stopping idle path and going to player !!")
-			self:GetNewPath(aTarget, false)
+	if (timerexpired(self.IGNORE_IDLE_PLAYERS_TIMER, 1)) then
+		if (not self.CURRENT_PATH_IGNOREPLAYERS and aTarget ~= nil and (not self.CURRENT_PATH_PLAYER or self:CheckIfPlayerMoved(self.CURRENT_PATH_GOAL, self.CURRENT_PATH_TARGET))) then
+			if (self.CURRENT_PATH_TARGET ~= aTarget) then
+				self:Log(0, "Found alive player. stopping idle path and going to player !!")
+				self:GetNewPath(aTarget, false)
+			end
 		end
 	end
 
@@ -179,13 +198,19 @@ BotNavigation.Update = function(self)
 		self.CURRENT_PATH_NODE_ABOVE_TERRAIN = (self.CURRENT_PATH_NODE_ABOVE or (self:IsNodeAboveTerrain(hCurrentNode, 2)))
 		
 		if (self:IsNodeUnreachable(hCurrentNode)) then
+		
+			Bot:StopMovement()
+			self:Log(3, "Current node is unreachable!")
+			
+			self.CURRENT_PATH_NODE_STUCK_TIME = timerinit()
+			
 			if (self.CURRENT_PATH_NODE > 1) then
 				self.CURRENT_PATH_NODE = self.CURRENT_PATH_NODE - 1
 				repeat 
 					self.CURRENT_PATH_NODE = self.CURRENT_PATH_NODE - 1
 					hCurrentNode = self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_NODE]
 					self:Log(3, "REVERTING to OLDER node %d!", self.CURRENT_PATH_NODE)
-				until (not hCurrentNode or self:IsNodeVisible(hCurrentNode))
+				until (not hCurrentNode or self:IsNodeVisible(hCurrentNode, true))
 					
 				if (not hCurrentNode) then
 					self:Log(3, "all reverted. no visible node found!")
@@ -198,12 +223,20 @@ BotNavigation.Update = function(self)
 				self:Log(3, "Resetting path")
 				self.CURRENT_PATH_RESETTIME = _time
 			end
+		else
+			-- self.CURRENT_PATH_NODE_STUCK_TIME = nil
 		end
 	end
 		
 	----------------
 	if (bReverted) then
 		self.CURRENT_PATH_REVERTED = true
+		
+		-- Experimental!!
+		self.CURRENT_PATH_PREVIOUS_NODE = self.CURRENT_PATH_NODE 
+		self.CURRENT_PATH_WAS_REVERTED = true
+		-- ~...
+		
 		self.CURRENT_NODE_REVERTED = (self.CURRENT_NODE_REVERTED or 0) + 1
 		if (self.CURRENT_NODE_REVERTED >= 10) then
 			self:GetNewPath(sRandomClass)
@@ -215,18 +248,51 @@ BotNavigation.Update = function(self)
 		
 	----------------
 	-- GetLastJump Might cause future problems!
-	local iGoalDist = 0.35
-	if (not bReverted and (Bot:GetLastJump(2.5) or self:IsLastNode(self.CURRENT_PATH_NODE) or (self:IsFirstNode(self.CURRENT_PATH_NODE) and self:IsNodeVisible(self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_NODE])))) then
+	local iGoalDist = 2
+	if (hCurrentNode and System.IsPointIndoors(hCurrentNode)) then
+		self:Log(5, "POINT INDOORS. HIGH PRECISION GOAL DISTANCE!")
+		iGoalDist = 0.5 end
+	
+	if (not timerexpired(self.CURRENT_PATH_NODE_STUCK_TIME, 1)) then
+		iGoalDist = 0.1
+		if (hCurrentNode and System.IsPointIndoors(hCurrentNode)) then
+			Bot:SetCameraTarget(hCurrentNode) end
+	elseif (not bReverted and (Bot:GetLastJump(2.5) or self:IsLastNode(self.CURRENT_PATH_NODE) or (self:IsFirstNode(self.CURRENT_PATH_NODE) and self:IsNodeVisible(self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_NODE])))) then
 		iGoalDist = 1.85 end
+		
+	----------------
+	Bot.GOAL_REACHED_DISTANCE = iGoalDist
 		
 	----------------
 	local bUpdate = false
 	local sUpdate
+		
+	----------------
+	if (hCurrentNode and not System.IsPointIndoors(hCurrentNode)) then
+		local iDistance = vector.distance(vPos, hCurrentNode)
+		if (isNumber(self.CURRENT_NODE_LASTDISTANCE) and iDistance > self.CURRENT_NODE_LASTDISTANCE) then
+			self:Log(3, "CURRENT NODE SURPASSED !!")
+			if (self:CanSeeNextNode()) then
+				self:Log(3, "COULD SEE NEXT NODE!! SWITCHING")
+				self.CURRENT_NODE_SURPASSED = true end  end
+			
+		self.CURRENT_NODE_LASTDISTANCE = iDistance
+	else
+		self.CURRENT_NODE_SURPASSED = nil
+	end
+	
+	----------------
 	if (not hCurrentNode) then
 		bUpdate = true
 		sUpdate = "No Current Node!!"
 		
-	elseif (vector.distance2d(g_localActor:GetPos(), hCurrentNode) < iGoalDist) then
+	elseif (self.CURRENT_NODE_SURPASSED) then
+		bUpdate = true
+		sUpdate = "Current Node Surpassed!!"
+		self.CURRENT_NODE_SURPASSED = nil
+		self.CURRENT_NODE_LASTDISTANCE = nil
+		
+	elseif (vector.distance2d(vPos, hCurrentNode) < iGoalDist) then
 		bUpdate = true
 		self.CURRENT_PATH_REVERTED = false
 		sUpdate = "Goal Reached!!"
@@ -241,10 +307,19 @@ BotNavigation.Update = function(self)
 			sUpdate = "Current Node is Behind us!!"
 		
 		end
+
+	-- Experimental!!
+	elseif (not bReverted and self.CURRENT_PATH_WAS_REVERTED) then
+		if (self:IsNodeVisibleEx(self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_PREVIOUS_NODE])) then
+			bUpdate = true
+			sUpdate = "Previus Reverted node is now visible!!"
+		
+		end
 	end
+	-- ~...
 	
 	----------------
-	self:Log(5, "Vec2D Distance To Goal: %f", (hCurrentNode and vector.distance2d(g_localActor:GetPos(), hCurrentNode) or 0))
+	self:Log(5, "Vec2D Distance To Goal: %f", (hCurrentNode and vector.distance2d(vPos, hCurrentNode) or 0))
 	self:Log(5, "Is Node %d (/%d) last Node %s", self.CURRENT_PATH_NODE, self.CURRENT_PATH_SIZE, (self:IsLastNode(self.CURRENT_PATH_NODE) and "yes" or "no"))
 	
 	
@@ -253,6 +328,9 @@ BotNavigation.Update = function(self)
 		self.CURRENT_PATH_NODE = self.CURRENT_PATH_NODE + 1
 		self:Log(0, "Updating Node Index to %d (%s)", self.CURRENT_PATH_NODE, sUpdate)
 		hCurrentNode = self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_NODE]
+		
+		self.CURRENT_PATH_WAS_REVERTED = nil
+		self.CURRENT_NODE_SURPASSED = nil
 	end
 	
 	----------------
@@ -347,9 +425,81 @@ BotNavigation.CanCircleJumpOnCurrentPath = function(self)
 	--------------
 	if (not self.IsInOpenSpace()) then
 		return false end
+	
+	--------------
+	if (System.IsPointIndoors(g_localActor:GetPos())) then
+		return false end
+		
+	--------------
+	local iUntilIndoors = self:GetNodeCountToIndoors()
+	if (isNumber(iUntilIndoors) and iUntilIndoors < 6) then
+		return false end
 		
 	--------------
 	return true
+end
+
+---------------------------
+-- GetNodeCountToIndoors
+
+BotNavigation.GetNodeCountToIndoors = function(self)
+
+	-----------
+	if (not isArray(self.CURRENT_PATH_ARRAY)) then
+		return end
+		
+	-----------
+	local vCurrent = self:GetCurrentNodePos(self.CURRENT_PATH_NODE)
+	if (vCurrent and self.CURRENT_PATH_NODE >= self.CURRENT_PATH_SIZE) then
+		return System.IsPointIndoors(vCurrent) end
+	
+	-----------
+	local iCounter = 0
+	local bIndoorsFound = false
+	for iNode = self.CURRENT_PATH_NODE, self.CURRENT_PATH_SIZE, 1 do
+		local vNode = self:GetCurrentNodePos(iNode)
+		if (vNode) then
+			if (self:IsNodeIndoors(iNode) or System.IsPointIndoors(vNode)) then
+				bIndoorsFound = true
+				break else
+					iCounter = iCounter + 1 end
+		end
+	end
+	
+	-----------
+	if (bIndoorsFound) then
+		-- NaviLog("Until Indoors: %d", iCounter)
+		return iCounter end
+	
+	-----------
+	return
+end
+
+---------------------------
+-- IsNodeIndoors
+
+BotNavigation.IsNodeIndoors = function(self, iNode)
+
+	-----------
+	if (not isArray(self.CURRENT_PATH_INDOOR_NODES)) then
+		self.CURRENT_PATH_INDOOR_NODES = {} end
+
+	-----------
+	if (not isNumber(iNode)) then
+		return end
+
+	-----------
+	if (iNode > self.CURRENT_PATH_SIZE) then
+		return end
+		
+	-----------
+	local bInside = self.CURRENT_PATH_INDOOR_NODES[iNode]
+	if (isNull(bInside)) then
+		bInside = System.IsPointIndoors(self:GetCurrentNodePos(iNode))
+		self.CURRENT_PATH_INDOOR_NODES[iNode] = bInside end
+		
+	-----------
+	return (bInside)
 end
 
 ---------------------------
@@ -357,6 +507,26 @@ end
 
 BotNavigation.IsInOpenSpace = function()
 	return true
+end
+
+---------------------------
+-- GetCurrentNodePos
+
+BotNavigation.GetCurrentNodePos = function(self, iNode)
+
+	-----------
+	if (not isArray(self.CURRENT_PATH_ARRAY)) then
+		return end
+
+	-----------
+	if (not isNumber(iNode)) then
+		return end
+
+	-----------
+	if (iNode > self.CURRENT_PATH_SIZE) then
+		return end
+		
+	return (self.CURRENT_PATH_ARRAY[iNode])
 end
 
 ---------------------------
@@ -400,17 +570,18 @@ end
 ---------------------------
 -- IsNodeUnreachable
 
-BotNavigation.IsNodeUnreachable = function(self, vNode)
+BotNavigation.IsNodeUnreachable = function(self, vNode, bRayCheck)
 	
 	-----------
 	local vNode = vector.modify(vNode, "z", 0.25, true)
 	
 	-----------
-	local bVisible = self:IsNodeVisible(vNode)
+	local bVisible = self:IsNodeVisible(vNode, true)
 		
 	-----------
 	if (not bVisible) then
 		self.CURRENT_NODE_UNSEEN_TIME = (self.CURRENT_NODE_UNSEEN_TIME or 0) + 1
+		self:Log(0, "UNSEEN TIME: %d", self.CURRENT_NODE_UNSEEN_TIME)
 	else
 		self.CURRENT_NODE_UNSEEN_TIME = 0
 	end
@@ -442,13 +613,28 @@ BotNavigation.IsNodeVisible_Handle = function(self, vSource, vTarget, sHandle, i
 ---------------------------
 -- IsNodeVisible
 
-BotNavigation.IsNodeVisible = function(self, vNode)
+BotNavigation.IsNodeVisible = function(self, vNode, bRayCheck)
 	
 		-----------
-		local bVisible = Pathfinding.CanSeeNode(Bot:GetViewCameraPos(), vNode, g_localActorId)
+		local vDir = Bot:GetViewCameraDir()
+		local vPos = Bot:GetViewCameraPos()
+		local iDistance = vector.distance(vNode, vPos)
+	
+		-----------
+		local bVisible = Pathfinding.CanSeeNode(vector.sub(vPos, vector.new(vDir)), vNode, g_localActorId)
 		if (not bVisible) then
-			bVisible = Pathfinding.CanSeeNode(g_localActor:GetBonePos("Bip01 Pelvis"), vNode, g_localActorId)
+			bVisible = Pathfinding.CanSeeNode(vector.sub(g_localActor:GetBonePos("Bip01 Pelvis"), vector.new(vDir)), vNode, g_localActorId)
 		end
+		
+		-- Pathfinding:Effect(vNode)
+		-----------
+		-- if (bRayCheck and bVisible) then
+			-- local vRayHit = Pathfinding.GetRayHitPosition(vPos, vDir, iDistance, ent_all, g_localActorId)
+			-- self:Log(0, "iDistance: %f, RayDist: %f", iDistance, vector.distance(vRayHit, vPos))
+			-- if (vRayHit and (vector.distance(vRayHit, vPos) * 1) < iDistance) then
+				-- self:Log(0, "Not visible!")
+				-- return false end
+		-- end
 		
 		-----------
 		return bVisible
@@ -645,6 +831,11 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 				hTarget = self.SPAWNPOINT_ENVIRONMENT[3][iCurrentEnt]
 			until (iCurrentEnt >= self.SPAWNPOINT_ENVIRONMENT[2] or hTarget ~= self.CURRENT_PATH_LAST_TARGET)
 			hTarget = self.SPAWNPOINT_ENVIRONMENT[3][iCurrentEnt]
+			
+			-----------
+			local hNewTarget = BotAI.CallEvent("GetPathGoal", hTarget)
+			if (not isDead(hNewTarget)) then
+				hTarget = hNewTarget end
 		else
 			hTarget = sTargetsClass
 			bTarget = true
@@ -652,21 +843,12 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 		end
 		
 		-----------
-		self.CURRENT_PATH_NODE = nil
-		self.CURRENT_PATH_NODE_ABOVE = nil
-		self.CURRENT_PATH_SIZE = nil
-		self.CURRENT_PATH_ARRAY = nil
-		self.CURRENT_PATH_FINISHTIME = nil
-		self.CURRENT_PATH_PLAYER = nil
-		self.CURRENT_PATH_TARGET = nil
-		self.CURRENT_PATH_IGNOREPLAYERS = nil
-		self.CURRENT_PATH_NODELAY = nil
-		self.CURRENT_PATH_REVERTED = nil
+		self:ResetPath()
 		
 		-----------
 		local bPlayer = false
 		local aTarget = self:GetClosestAlivePlayer()
-		if (not bTarget and aTarget and not self:WasEntityUnreachable(aTarget)) then
+		if (not bTarget and aTarget and not self:WasEntityUnreachable(aTarget) and aTarget.id ~= g_localActorId) then
 			hTarget = aTarget
 			bPlayer = true
 		end
@@ -684,9 +866,14 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 			iDistance = vector.distance(vPos, vTarget)
 			
 			vGoal = vector.modify(vTarget, "z", 0.5, true)
-			aPath = Pathfinding:GetPath(vector.modify(vPos, "z", 0.5, true), vGoal)
-			if (not aPath and bPlayer) then
-				aPath = self:GetNewPath(self.CURRENT_PATH_ENVIRONMENT_CLASS, true)
+			
+			if (not vector.isvector(vGoal)) then
+				self:Log(0, "GOAL IS NO VECTOR !!")
+			else
+				aPath = Pathfinding:GetPath(vector.modify(vPos, "z", 0.5, true), vGoal)
+				if (not aPath and bPlayer) then
+					aPath = self:GetNewPath(self.CURRENT_PATH_ENVIRONMENT_CLASS, true)
+				end
 			end
 		end
 		
@@ -719,6 +906,26 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 	end
 
 ---------------------------
+-- ResetPath
+
+BotNavigation.ResetPath = function(self)
+		self.CURRENT_PATH_NODE = nil
+		self.CURRENT_PATH_NODE_ABOVE = nil
+		self.CURRENT_PATH_SIZE = nil
+		self.CURRENT_PATH_ARRAY = nil
+		self.CURRENT_PATH_FINISHTIME = nil
+		self.CURRENT_PATH_PLAYER = nil
+		self.CURRENT_PATH_TARGET = nil
+		self.CURRENT_PATH_IGNOREPLAYERS = nil
+		self.CURRENT_PATH_NODELAY = nil
+		self.CURRENT_PATH_REVERTED = nil
+		self.CURRENT_PATH_WAS_REVERTED = nil
+		self.CURRENT_NODE_SURPASSED = nil
+		self.CURRENT_NODE_LASTDISTANCE = nil
+		self.CURRENT_PATH_INDOOR_NODES = nil
+	end
+
+---------------------------
 -- ResetPathData
 
 BotNavigation.ResetPathData = function(self)
@@ -731,6 +938,11 @@ BotNavigation.ResetPathData = function(self)
 		self.CURRENT_PATH_TARGET = nil
 		self.CURRENT_PATH_IGNOREPLAYERS = nil
 		self.CURRENT_PATH_NODELAY = nil
+		self.CURRENT_PATH_REVERTED = nil -- ??
+		self.CURRENT_PATH_WAS_REVERTED = nil -- ??
+		self.CURRENT_NODE_SURPASSED = nil
+		self.CURRENT_NODE_LASTDISTANCE = nil
+		self.CURRENT_PATH_INDOOR_NODES = nil
 	end
 
 ---------------------------
@@ -875,7 +1087,10 @@ BotNavigation.GetClosestAlivePlayer = function(self, bRetry)
 			if (player.id ~= g_localActorId and Bot:AliveCheck(player) and not self:WasEntityUnreachable(player)) then
 				local iDistance = vector.distance(player:GetPos(), vPos)
 				if (aTarget[2] == -1 or iDistance < aTarget[2]) then
-					aTarget = { player, iDistance } end
+					local bOk = BotAI.CallEvent("IsTargetOk", player, iDistance)
+					if (isDead(hNewTarget) or bOk == true) then
+						aTarget = { player, iDistance } end
+				end
 			end
 		end
 		

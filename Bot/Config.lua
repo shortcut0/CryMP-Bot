@@ -18,10 +18,11 @@ Config = {
 	-- Name of the current server
 	CurrentServer = "116.203.92.129:50002"; -- tox PS
 	CurrentServer = "116.203.92.129:55001"; -- atom 
-	CurrentServer = "116.203.92.129:50001"; -- tox IA
 	CurrentServer = "116.203.92.129:64087"; -- something
+	CurrentServer = "94.16.110.182:64005"; -- alien
 	CurrentServer = "116.203.92.129:64088"; -- something_pro
 	CurrentServer = "127.0.0.1:66666:2020"; -- local
+	CurrentServer = "116.203.92.129:50001"; -- tox IA
 	
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers
@@ -38,7 +39,7 @@ Config = {
 	
 	----------------------------------------------
 	-- If false, bot will not send chat messages
-	BotChatMessages = true; -- !!TEMP!!
+	BotChatMessages = false; -- !!TEMP!!
 	
 	-- lower number is higher chance to send a message
 	BotMessageChance = 20;
@@ -68,8 +69,14 @@ Config = {
 	-- Buy items in buy zones
 	BuyItems = true;
 	
+	-- buy these kits
+	BuyableKits = { ["RadarKit"] = true, ["Lockpick"] = false, ["RepairKit"] = false };
+	
+	-- buy these kits
+	BuyableExplosives = { ["Claymore"] = true, ["C4"] = true };
+	
 	-- buy only these items
-	BuyableItems = { };
+	BuyableItems = { ["GaussRifle"] = true, ["DSG1"] = true, ["FY71"] = true, ["SCAR"] = true, ["SMG"] = true, ["Claymore"] = true };
 	
 	-- dont buy these items
 	ExcludedItems = { };
@@ -165,6 +172,9 @@ Config = {
 	-- if true, bot will never sprint (like newbies do)
 	NoSprinting = false;
 	
+	-- if true, bot will use WIP circlejumping
+	BotCircleJumping = true;
+	
 	----------------------------------------------
 	-- Randomize path pos (Experimental)
 	PathRandomizing = true;
@@ -239,11 +249,14 @@ Config = {
 	AdminName = "ryzen"; -- Rise with Ryzen
 	
 	----------------------------------------------
+	-- If true, bot uses names
+	BotUseNames = false;
+	
 	-- If true, bot uses weird random names
 	RandomNames = false;
 	
 	-- The Name of the Bot
-	BotName = "";
+	BotName = "Bot";
 	
 	----------------------------------------------
 	-- if true, error box will appear on script error

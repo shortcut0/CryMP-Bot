@@ -191,17 +191,23 @@ end
 ---------------------------
 -- table.countRec
 
-table.countRec = function(t, pred)
+table.countRec = function(t, pred, iLevels, iLevel)
 
 	if (not table.isarray(t)) then
 		return 0
 	end
+	
+	local iLevel = checkNumber(iLevel, 0)
+	
+	local bLevelOk = true
+	if (isNumber(iLevels)) then
+		bLevelOk = iLevel < iLevels end
 
 	local iCount = 0
 	for _, v in pairs(t) do
 		if (pred == nil or pred(v)) then
-			if (table.isarray(v)) then
-				iCount = iCount + table.countRec(v, pred)
+			if (table.isarray(v) and bLevelOk) then
+				iCount = iCount + table.countRec(v, pred, iLevels, (iLevel + 1))
 			else
 				iCount = iCount + 1
 			end
@@ -268,10 +274,17 @@ end
 ---------------------------
 -- table.append
 
-table.append = function(t1, t2)
-	for _, v in ipairs(t2) do
-		table.insert(t1, v)
+table.append = function(t1, ...)
+
+	for _, t in pairs({ ... }) do
+		for __, _t in pairs(t) do
+			table.insert(t1, _t)
+		end
 	end
+
+	-- for _, v in ipairs(t2) do
+		-- table.insert(t1, v)
+	-- end
 	return t1
 end
 
