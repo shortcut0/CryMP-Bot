@@ -188,6 +188,32 @@ vector.add = function(v1, v2)
 end
 
 ---------------------------
+-- vector.addInPlace
+
+vector.addInPlace = function(v1, v2)
+
+	------------------
+	if (not vector.isvector(v1)) then
+		return end
+		
+	------------------
+	if (not vector.isvector(v2)) then
+		return end
+	
+	------------------
+	local vNew = vector.new(v1)
+	local vAdd = vector.new(v2)
+	
+	------------------
+	vNew.x = vNew.x + vAdd.x
+	vNew.y = vNew.y + vAdd.y
+	vNew.z = vNew.z + vAdd.z
+	
+	------------------
+	return vNew
+end
+
+---------------------------
 -- vector.addN
 
 vector.addN = function(v, i, sKey)

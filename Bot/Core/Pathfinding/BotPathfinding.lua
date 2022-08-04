@@ -48,6 +48,7 @@ Pathfinding.RECORD_SKIP_FLYING = true
 
 BOT_NAVMESH = nil
 FORCED_LINKS = {}
+BAKED_LINKS = {}
 	
 -------------------
 -- Pathfinding.Init
@@ -135,6 +136,7 @@ Pathfinding.InitCVars = function()
 		{ "record_import", 		"Pathfinding:MergeNavmesh()",			"Merges already Generated Navmesh you newly Generated one" },
 		{ "record_insert", 		"Pathfinding:InsertNode()",				"Insers a New node at your current position" },
 		{ "record_remove", 		"Pathfinding:RemoveNodes(%%)",			"Removes all Nodes in X Radius" },
+		{ "record_populate",	"Pathfinding:PopulateNodes()",			"Populates all currently generated nodes" },
 		
 		---------------
 		{ "record_export", 		"Pathfinding:ExportNavmesh(Pathfinding.RECORDED_NAVMESH)", "Exports the newly generated Navmesh" },
@@ -182,6 +184,7 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 	------------
 	BOT_NAVMESH = nil
 	FORCED_LINKS = {}
+	BAKED_LINKS = {}
 	AI_ACTION_POINTS = {}
 	self.VALIDATION_FUNC = function() end
 		
@@ -478,6 +481,11 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance)
 	local vSource = BOT_NAVMESH[iSource]
 	
 	-----------------------
+	local aBaked = self:GetBakedLinks(iSource)
+	if (isArray(aBaked)) then
+		return aBaked end
+	
+	-----------------------
 	local fRayCheck = self.VALIDATION_FUNC
 	
 	-----------------------
@@ -505,6 +513,23 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance)
 	
 	-----------------------
 	return aConnections
+end
+
+---------------------------
+-- GetBakedLinks
+
+Pathfinding.GetBakedLinks = function(self, iSourceNode)
+
+	if (not self.USE_BAKED_PATHNODES) then
+		return end
+
+	local sHashedNode = string.hexencode("baked_node_" .. iSourceNode)
+	local aBaked = BAKED_LINKS[tonumber(sHashedNode)]
+	if (isArray(aBaked)) then
+		PathFindLog("Found %d Baked Links for Node %d", table.count(aBaked), iSourceNode)
+		return aBaked end
+		
+	return
 end
 
 ---------------------------
@@ -629,6 +654,20 @@ end
 Pathfinding.GetRayHitPosition = function(vSource, vDirection, iDistance, fFlags, idIgnore)
 
 	-------------------
+	local aHit = Pathfinding.GetRayHit(vSource, vDirection, iDistance, fFlags, idIgnore)
+	if (isArray(aHit)) then
+		return (aHit.pos or aHit.position) end
+	
+	-------------------
+	return nil
+end
+
+---------------------------------------------
+-- Pathfinding.GetRayHit
+
+Pathfinding.GetRayHit = function(vSource, vDirection, iDistance, fFlags, idIgnore)
+
+	-------------------
 	if (not idIgnore) then
 		idIgnore = NULL_ENTITY end
 
@@ -649,7 +688,7 @@ Pathfinding.GetRayHitPosition = function(vSource, vDirection, iDistance, fFlags,
 	
 	-------------------
 	if (iHits and iHits > 0 and isArray(aHits)) then
-		return (aHits.pos or aHits.position) end
+		return (aHits) end
 	
 	-------------------
 	return nil
@@ -1468,6 +1507,80 @@ Pathfinding.RecordPlayerMovement = function(self, aActor)
 	
 end
 
+
+-------------------
+-- PopulateNodes
+
+Pathfinding.PopulateNodes = function(self)
+	
+	----------------
+	local function posOk(vPos, vParent)
+	
+		----------------
+		if (not vector.isvector(vPos)) then
+			return false end
+	
+		----------------
+		if (System.IsPointIndoors(vPos)) then
+			return false end
+	
+		----------------
+		local bCanInsert = false
+		if (not Pathfinding.IsNodesInRadius(vPos, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 1)) then
+			bCanInsert = true end
+			
+		----------------
+		local bElevationChanged = (not self:CompareNodeZHeight(vPos, vParent))
+		if (not bCanInsert) then
+			bCanInsert = bElevationChanged
+			bCanInsert = bCanInsert and not Pathfinding.IsNodesInRadius(vPos, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 0.15)
+		end
+		
+		----------------
+		return bCanInsert
+	end
+	
+	----------------
+	local iFlags = ent_all - ent_rigid - ent_living
+	
+	----------------
+	local iPopulated = 0
+	for i, vNode in pairs(self.RECORDED_NAVMESH) do
+		local vNode_A = Pathfinding.GetRayHitPosition(vector.addInPlace(vNode, vector.make(2, 0, 1)),  vectors.down, 3, iFlags)
+		local vNode_B = Pathfinding.GetRayHitPosition(vector.addInPlace(vNode, vector.make(2, 2, 1)),  vectors.down, 3, iFlags)
+		local vNode_C = Pathfinding.GetRayHitPosition(vector.addInPlace(vNode, vector.make(-2, 0, 1)), vectors.down, 3, iFlags)
+		local vNode_D = Pathfinding.GetRayHitPosition(vector.addInPlace(vNode, vector.make(0, -2, 1)), vectors.down, 3, iFlags)
+	
+		if (posOk(vNode_A, vNode)) then
+			self:Effect(vNode_A, 1)
+			iPopulated = iPopulated + 1
+			table.insert(self.RECORDED_NAVMESH, vNode_A) end
+			
+		if (posOk(vNode_B, vNode)) then
+			self:Effect(vNode_B, 1)
+			iPopulated = iPopulated + 1
+			table.insert(self.RECORDED_NAVMESH, vNode_B) end
+			
+		if (posOk(vNode_C, vNode)) then
+			self:Effect(vNode_C, 1)
+			iPopulated = iPopulated + 1
+			table.insert(self.RECORDED_NAVMESH, vNode_C) end
+			
+		if (posOk(vNode_D, vNode)) then
+			self:Effect(vNode_D, 1)
+			iPopulated = iPopulated + 1
+			table.insert(self.RECORDED_NAVMESH, vNode_D) end
+	end
+	
+	----------------
+	PathFindLog("Populate %d Nodes", iPopulated)
+	
+	----------------
+	if (self.AUTO_PAINT_NAVMESH) then
+		self:PaintNavmesh()  end
+	
+end
+
 -------------------
 -- Pathfinding.NodeHeightChanged
 
@@ -1648,6 +1761,19 @@ Pathfinding.ExportNavmesh = function(self, aNodes)
 				hFile:write(string.format("\t\t[%d] = %s,\n", iLink, tostring(hLinked)))
 			end
 			hFile:write("\t},\n")
+		end
+	end
+	hFile:write("}\n")
+	hFile:write("\n")
+	hFile:write("------------------------\n")
+	hFile:write("BAKED_LINKS = {\n")
+	for iNode, aNode in pairs(self.VALIDATED_NAVMESH) do
+		if (table.count(aNode.links) > 0) then
+			hFile:write(string.format("\t[%s] = { ", string.hexencode("baked_node_" .. iNode)))
+			for iLink, bLinked in pairs(aNode.links) do
+				hFile:write(string.format("%d, ", iLink))
+			end
+			hFile:write(" },\n")
 		end
 	end
 	hFile:write("}\n")

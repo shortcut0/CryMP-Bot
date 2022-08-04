@@ -1088,7 +1088,7 @@ BotNavigation.GetClosestAlivePlayer = function(self, bRetry)
 				local iDistance = vector.distance(player:GetPos(), vPos)
 				if (aTarget[2] == -1 or iDistance < aTarget[2]) then
 					local bOk = BotAI.CallEvent("IsTargetOk", player, iDistance)
-					if (isDead(hNewTarget) or bOk == true) then
+					if (isDead(bOk) or bOk == true) then
 						aTarget = { player, iDistance } end
 				end
 			end

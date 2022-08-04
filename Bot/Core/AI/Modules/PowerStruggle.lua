@@ -606,7 +606,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			-- ~...
 		end
 		
-		if (not timerexpired(self.LAST_ITEMS_BOUGHT_TIMER, 1)) then
+		if (not timerexpired(self.LAST_ITEMS_BOUGHT_TIMER, 0.5)) then
 			if (not hTarget or not self:IsContested(hTarget)) then
 				self:AILog(0, "We're still buying equipment !")
 				BotNavigation:ResetPath()
@@ -1049,6 +1049,10 @@ BotAI:CreateAIModule("PowerStruggle", {
 			return end
 	
 		-----------
+		if (self:IsNearBase()) then
+			return end
+	
+		-----------
 		if (not timerexpired(self.LAST_EXPLOSIVE_BOUGHT_TIMER, 5)) then
 			return end
 			
@@ -1117,6 +1121,25 @@ BotAI:CreateAIModule("PowerStruggle", {
 			self.LAST_EXPLOSIVE_BOUGHT_TIMER = timerinit()
 			self.LAST_BOUGHT_ITEM = aToBuy[1]
 			System.ExecuteCommand(string.format("buy %s", aToBuy[3])) end
+	end,
+	
+	-----------------
+	IsNearBase = function(self)
+	
+		-----------
+		local hBase = self.SPAWN_BASE
+		if (not hBase) then
+			return false end
+			
+		-----------
+		local vPos = g_localActor:GetPos()
+		local vBase = hBase:GetPos()
+		
+		-----------
+		local iDistance = vector.distance(vPos, vBase)
+		
+		-----------
+		return (iDistance < 60)
 	end,
 	
 	-----------------

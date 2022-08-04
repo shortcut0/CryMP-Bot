@@ -34,6 +34,13 @@ luautils.isNumber = function(hParam)
 end
 
 ---------------------------
+-- luautils.isBoolean
+
+luautils.isBoolean = function(hParam)
+	return type(hParam) == "bool"
+end
+
+---------------------------
 -- luautils.isArray
 
 luautils.isArray = function(hParam)
@@ -147,6 +154,7 @@ luautils.checkVar = function(sVar, hDefault)
 	-------------
 	if (isNull(sVar)) then
 		return hDefault end
+		
 	-------------
 	return sVar
 end
@@ -156,6 +164,8 @@ getrandom = luautils.random
 isNull = luautils.isNull
 isDead = luautils.isDead
 isArray = luautils.isArray
+isBoolean = luautils.isBoolean
+isBool = luautils.isBoolean
 isString = luautils.isString
 isNumber = luautils.isNumber
 isFunction = luautils.isFunction

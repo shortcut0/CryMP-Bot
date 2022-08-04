@@ -189,6 +189,61 @@ table.count = function(t, pred)
 end
 
 ---------------------------
+-- table.countTypes
+
+table.countTypes = function(t, bReturnCount)
+
+	------------
+	local sTypes = "%d Arrays, %d Floats, %d Strings, %d Booleans, %d Functions, %d Other Entires"
+	if (not table.isarray(t)) then
+		if (bReturnCount) then
+			return 0, 0, 0, 0, 0, 0 end
+			
+		return string.format(sTypes, 0, 0, 0, 0, 0, 0)
+	end
+
+	------------
+	local iArrays = 0
+	local iFloats = 0
+	local iStrings = 0
+	local iBooleans = 0
+	local iFunctions = 0
+	local iOtherEntires = 0
+	
+	------------
+	for _, v in pairs(t) do
+		
+		if (isArray(v)) then
+			local aRet = { table.countTypes(v, true) }
+			iArrays = iArrays + aRet[1] + 1
+			iFloats = iFloats + aRet[2]
+			iStrings = iStrings + aRet[3]
+			iBooleans = iBooleans + aRet[4]
+			iFunctions = iFunctions + aRet[5]
+			iOtherEntires = iOtherEntires + aRet[6]
+			
+			elseif (isNumber(v)) then
+				iFloats = iFloats + 1
+				elseif (isString(v)) then
+					iStrings = iStrings + 1
+					elseif (isBoolean(v)) then
+						iBooleans = iBooleans + 1
+						elseif (isFunction(v)) then
+							iFunctions = iFunctions + 1
+							else
+								iOtherEntires = iOtherEntires + 1
+								end
+	end
+	
+	------------
+	if (bReturnCount) then
+		return iArrays, iFloats, iStrings, iBooleans, iFunctions, iOtherEntires end
+	
+	------------
+	return string.format(sTypes, iArrays, iFloats, iStrings, iBooleans, iFunctions, iOtherEntires)
+end
+
+---------------------------
 -- table.countRec
 
 table.countRec = function(t, pred, iLevels, iLevel)

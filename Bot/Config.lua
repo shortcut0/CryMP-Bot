@@ -20,9 +20,9 @@ Config = {
 	CurrentServer = "116.203.92.129:55001"; -- atom 
 	CurrentServer = "116.203.92.129:64087"; -- something
 	CurrentServer = "94.16.110.182:64005"; -- alien
-	CurrentServer = "116.203.92.129:64088"; -- something_pro
 	CurrentServer = "127.0.0.1:66666:2020"; -- local
 	CurrentServer = "116.203.92.129:50001"; -- tox IA
+	CurrentServer = "116.203.92.129:64088"; -- something_pro
 	
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers
@@ -72,11 +72,34 @@ Config = {
 	-- buy these kits
 	BuyableKits = { ["RadarKit"] = true, ["Lockpick"] = false, ["RepairKit"] = false };
 	
-	-- buy these kits
+	-- priority for buyable kits
+	KitPriority = {
+		['RadarKit'] = 3,
+		['RepairKit'] = 2,
+		['LockpickKit'] = 1,
+	};
+	
+	-- buy these explosives
 	BuyableExplosives = { ["Claymore"] = true, ["C4"] = true };
+	
+	-- priority for buyable explosives
+	ExplosivePriority = {
+		['C4'] = 2,
+		['Claymore'] = 1,
+	};
 	
 	-- buy only these items
 	BuyableItems = { ["GaussRifle"] = true, ["DSG1"] = true, ["FY71"] = true, ["SCAR"] = true, ["SMG"] = true, ["Claymore"] = true };
+	
+	-- priority for buyable items
+	BuyPriority = {
+		['GaussRifle'] = 3.1,
+		['DSG1'] = 3.2,
+		['FY71'] = 3.0,
+		['SCAR'] = 2.5,
+		['SMG'] = 1.5,
+		['LAW'] = 0,
+	};
 	
 	-- dont buy these items
 	ExcludedItems = { };
@@ -162,7 +185,7 @@ Config = {
 	-- if true, bot will team with players
 	BotTeaming = false;
 	
-	-- name name tag of players the bot will consider teammates
+	-- name tag of players the bot will consider teammates
 	BotTeamName = "[CRYCLAN]";
 	
 	----------------------------------------------
