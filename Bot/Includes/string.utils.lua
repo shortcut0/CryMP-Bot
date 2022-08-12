@@ -14,6 +14,18 @@ stringutils = {
 }
 
 ---------------------------
+
+string.NA = "N/A"
+string.UNKNOWN = "<Unknown>"
+string.INVALID = "<Invalid>"
+string.ERROR = "<Error>"
+string.WARNING = "<Warning>"
+string.FAILED = "<Failed>"
+string.EMPTY = "<Empty>"
+
+string.COLOR_CODE = "%$%d"
+
+---------------------------
 -- string.swap
 
 string.new = function(s)
@@ -217,18 +229,30 @@ end
 ---------------------------
 -- string.rspace
 
-string.lspace = function(s, space)
+string.lspace = function(s, space, sClean)
 
-	return string.rep(" ", space - string.len(s)) .. s
+	------------
+	local iLen = string.len(s)
+	if (sClean) then
+		iLen = string.len(string.gsub(s, sClean, "")) end
+		
+	------------
+	return string.rep(" ", space - iLen) .. s
 
 end
 
 ---------------------------
 -- string.mspace
 
-string.mspace = function(s, space)
+string.mspace = function(s, space, s_len_div, bClean)
 
-	local s_len = s:len() / (s_len_div or 1);
+	------------
+	local iLen = string.len(s)
+	if (sClean) then
+		iLen = string.len(string.gsub(s, sClean, "")) end
+		
+	------------
+	local s_len = (iLen) / (s_len_div or 1);
 	local side_len = math.floor((space / 2) - (s_len / 2));
 	
 	local add = side_len * 2 + s_len < space;
@@ -239,10 +263,52 @@ end
 ---------------------------
 -- string.lspace
 
-string.rspace = function(s, space)
+string.rspace = function(s, space, sClean)
 
-	return s .. string.rep(" ", space - string.len(s))
+	------------
+	local iLen = string.len(s)
+	if (sClean) then
+		iLen = string.len(string.gsub(s, sClean, "")) end
+		
+	------------
+	return s .. string.rep(" ", space - iLen)
 
+end
+
+---------------------------
+-- string.lspace
+
+string.repeats = function(s, iRepeats)
+
+	--------
+	if (not isNumber(iRepeats)) then
+		return s end
+		
+	--------
+	if (iRepeats <= 1) then
+		return s end
+
+	--------
+	local sResult = s
+	for i = 1, (iRepeats - 1) do
+		sResult = sResult .. s
+	end
+
+	--------
+	return sResult
+end
+
+---------------------------
+-- string.formatex
+
+string.formatex = function(s, ...)
+
+	--------
+	if (#{...} > 0) then
+		return (string.format(s, ...)) end
+
+	--------
+	return (s)
 end
 
 ---------------------------
@@ -573,6 +639,7 @@ stringutils.rspace = string.rspace
 stringutils.mspace = string.mspace
 stringutils.lspace = string.lspace
 stringutils.getdir = string.getdir
+stringutils.repeats = string.repeats
 stringutils.reverse = string.reverse
 stringutils.stripws = string.stripws
 stringutils.getchars = string.getchars

@@ -323,7 +323,52 @@ end
 -- table.empty
 
 table.empty = function(t)
-	return next(t) == nil 
+	return (table.count(t) == 0)
+end
+
+---------------------------
+-- table.getmax
+
+table.getmax = function(t, sKey)
+	local iMax
+	for i, v in pairs(t) do
+		local iNumber = tonumber(v)
+		if (isArray(v) and v[sKey]) then
+			iNumber = checkNumber(tonumber(v[sKey]), 0) end
+			
+		if (isNull(iMax) or (checkNumber(iNumber, 0) > iMax)) then
+			iMax = iNumber end
+	end
+	 
+	return iMax
+end
+
+---------------------------
+-- table.index
+
+table.index = function(t, iIndex)
+	local c = 0
+	for i, v in pairs(t) do
+		c = c + 1
+		if (c == iIndex) then
+			return v end
+	end
+	 
+	return
+end
+
+---------------------------
+-- table.indexname
+
+table.indexname = function(t, iIndex)
+	local c = 0
+	for i, v in pairs(t) do
+		c = c + 1
+		if (c == iIndex) then
+			return i end
+	end
+	 
+	return
 end
 
 ---------------------------

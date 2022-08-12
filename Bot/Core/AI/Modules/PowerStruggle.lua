@@ -4,6 +4,7 @@
 BotAI:CreateAIModule("PowerStruggle", {
 
 	----------
+	BUY_ERROR = {},
 	BUILDINGS = {},
 	CURRENT_TEAM = 0,
 	
@@ -485,6 +486,12 @@ BotAI:CreateAIModule("PowerStruggle", {
 		end
 		
 		----------------
+		g_gameRules.Client.ClBuyError = function(self, sItem)
+			AIModule.BUY_ERROR[sItem] = timerinit()
+			AIModule:AILog(0, "ERROR BUYING %s", sItem)
+		end
+		
+		----------------
 		g_gameRules.Client.OnCapture = function(self, hBuilding, teamId)
 		
 			local idBuilding = hBuilding.id
@@ -909,7 +916,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local aConsideredItems = {}
 		for i, aProps in pairs(aBuyList) do
 			local sClass = aProps.class
-			if (sClass) then
+			if (sClass and not self:BuyError(aProps.id)) then
 				if (not Bot:HasItem(sClass) and Bot:SpaceInInventory(sClass)) then
 					if (aProps.price and aProps.price <= iPrestige and not _BLACKLISTED[sClass] and (aBuyable[sClass] == true and aExcluded[sClass] ~= true)) then
 						if (timerexpired(self.LAST_ITEM_BOUGHT_TIMER, 1) or (sClass ~= self.LAST_BOUGHT_ITEM)) then
@@ -993,7 +1000,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local aConsideredKits = {}
 		for i, aProps in pairs(aBuyList) do
 			local sClass = aProps.class
-			if (sClass) then
+			if (sClass and not self:BuyError(aProps.id)) then
 				if (not Bot:HasItem(sClass)) then
 					if (aProps.price and aProps.price <= iPrestige and not _BLACKLISTED[sClass] and (aBuyableKits[sClass] == true and aExcluded[sClass] ~= true)) then
 						if (timerexpired(self.LAST_KIT_BOUGHT_TIMER, 1) or (sClass ~= self.LAST_BOUGHT_ITEM)) then
@@ -1078,7 +1085,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local aConsideredExplosives = {}
 		for i, aProps in pairs(aBuyList) do
 			local sClass = aProps.class
-			if (sClass) then
+			if (sClass and not self:BuyError(aProps.id)) then
 				if (not Bot:HasItem(sClass)) then
 					if (aProps.price and aProps.price <= iPrestige and not _BLACKLISTED[sClass] and (aBuyableExplosives[sClass] == true and aExcluded[sClass] ~= true)) then
 						if (timerexpired(self.LAST_EXPLOSIVE_BOUGHT_TIMER, 1) or (sClass ~= self.LAST_BOUGHT_ITEM)) then
@@ -1121,6 +1128,11 @@ BotAI:CreateAIModule("PowerStruggle", {
 			self.LAST_EXPLOSIVE_BOUGHT_TIMER = timerinit()
 			self.LAST_BOUGHT_ITEM = aToBuy[1]
 			System.ExecuteCommand(string.format("buy %s", aToBuy[3])) end
+	end,
+	
+	-----------------
+	BuyError = function(self, sItemId)
+		return (not timerexpired(self.BUY_ERROR[sItemId], 5))
 	end,
 	
 	-----------------

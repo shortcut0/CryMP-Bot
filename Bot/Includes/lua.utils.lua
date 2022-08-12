@@ -159,6 +159,24 @@ luautils.checkVar = function(sVar, hDefault)
 	return sVar
 end
 
+---------------------------
+-- luautils.checkFunc
+
+luautils.checkFunc = function(fFunc, hDefault, ...)
+
+	-------------
+	if (isNull(fFunc) or not isFunc(fFunc)) then
+		return hDefault end
+		
+	-------------
+	local hReturn = fFunc(...)
+	if (isNull(hReturn)) then
+		return hDefault end
+		
+	-------------
+	return hReturn
+end
+
 -------------------
 getrandom = luautils.random
 isNull = luautils.isNull
@@ -169,10 +187,13 @@ isBool = luautils.isBoolean
 isString = luautils.isString
 isNumber = luautils.isNumber
 isFunction = luautils.isFunction
+isFunc = luautils.isFunction
 isEntityId = luautils.isEntityId
 fileexists = luautils.fileexists
 checkNumber = luautils.checkNumber
+checkNum = luautils.checkNumber
 checkVar = luautils.checkVar
+checkFunc = luautils.checkFunc
 compNumber = luautils.compNumber
 
 -------------------

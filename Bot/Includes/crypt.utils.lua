@@ -77,6 +77,10 @@ CALG_SCA_PRINT = 0x009
 CALG_SCA_EXTENDED = 0x00A
 
 ---------------------------
+
+crypt.DEFAULT_CRYPTING_ALGORITHM = CALG_SCA_255
+
+---------------------------
 -- crypt.encrypt
 
 crypt.encrypt = function(sString, sKey, iCharSet)
@@ -84,7 +88,7 @@ crypt.encrypt = function(sString, sKey, iCharSet)
 	local self = crypt
 
 	local sKey = checkVar(sKey, "")
-	local iCharSet = checkVar(iCharSet, CALG_SCA_255)
+	local iCharSet = checkVar(iCharSet, crypt.DEFAULT_CRYPTING_ALGORITHM)
 
 	---------
 	local sString = string.hexencode(sString)
@@ -193,7 +197,7 @@ crypt.decrypt = function(sString, sKey, iCharSet)
 	local iString = string.len(sString)
 
 	---------
-	local iCharSet = checkVar(iCharSet, CALG_SCA_255)
+	local iCharSet = checkVar(iCharSet, crypt.DEFAULT_CRYPTING_ALGORITHM)
 	local aCharSet = self.GetCharSet(iCharSet)
 	local iCharSetLen = table.count(aCharSet)
 	if (iCharSetLen < 16) then
@@ -353,6 +357,9 @@ crypt.CharGetIndex = function(sChar)
 		return -1 end
 		
 	---------
+	if (not isNumber(iIndex)) then
+		return -1 end
+	
 	return iIndex - 1
 end
 

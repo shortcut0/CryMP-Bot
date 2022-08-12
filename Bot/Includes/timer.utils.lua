@@ -20,6 +20,14 @@ timer.init = function()
 end
 
 ---------------------------
+-- luautils.destroy
+
+timer.destroy = function(hTimer)
+	hTimer = nil
+	return (nil)
+end
+
+---------------------------
 -- timer.diff
 
 timer.diff = function(hTimer)
@@ -30,12 +38,16 @@ end
 -- timer.check
 
 timer.expired = function(hTimer, iTime)
+
+	-----------
 	if (not isNumber(hTimer)) then
 		return true end
 		
+	-----------
 	if (not isNumber(iTime)) then
 		return true end
 	
+	-----------
 	return (timer.diff(hTimer) >= iTime)
 end
 
@@ -84,6 +96,7 @@ end
 
 -------------------
 timerinit = timer.init
+timerdestroy = timer.destroy
 timerdiff = timer.diff
 timerexpired = timer.expired
 sleep = timer.sleep

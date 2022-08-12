@@ -299,6 +299,11 @@ FinchPower = {
 			return false end
 			
 		-----------------------
+		bOk, hLib = self:LoadFile(sLibPath .. "\\bit.utils.lua")
+		if (not bOk) then
+			return false end
+			
+		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\string.utils.lua")
 		if (not bOk) then
 			return false end
@@ -373,7 +378,7 @@ FinchPower = {
 					self.CONNECT_PASSWORD = sPass
 					
 					-----------------------
-					FinchLog("Parsed Server Info (IP: %s, Port: %s, Pass: %s) from String %s", self.CONNECT_IP, self.CONNECT_PORT, (self.CONNECT_PASSWORD or ""), sServer)
+					FinchLog("Parsed Server Info (IP: %s, Port: %s, Pass: '%s') from String %s", self.CONNECT_IP, self.CONNECT_PORT, (self.CONNECT_PASSWORD or ""), sServer)
 				end
 			end
 		end	
