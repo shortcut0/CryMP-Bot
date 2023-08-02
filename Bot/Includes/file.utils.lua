@@ -216,13 +216,13 @@ fileutils.getfiles = function(sPath)
 	---------
 	local sPath = checkVar(sPath, string.getworkingdir())
 	-- local sFiles = string.getval(string.format("IF EXIST \"%s\\*\" DIR \"%s\" /B /ON /A-D", sPath, sPath), fileutils.LUA_5_3)
-	local sFiles = string.getval(string.format([[
-		2>&1 >nul WHERE "%s:*" >nul && (DIR "%s" /B /ON /A-D) || (ECHO ?dir_empty?)
-		
-	]], sPath, sPath), fileutils.LUA_5_3)
+	-- local sFiles = string.getval(string.format([[2>&1 >nul WHERE "%s:*" >nul && (DIR "%s" /B /ON /A-D) || (ECHO ?dir_empty?)]], sPath, sPath), fileutils.LUA_5_3)
+	-- local sFiles = string.getval(string.format([[2>&1>nul CD "%s" && (DIR "%s" /B /ON /A-D) || (ECHO ?dir_empty?)]], sPath, sPath), fileutils.LUA_5_3)
+	-- local sFiles = string.getval(string.format([[>nul WHERE "%s:*">nul && (DIR "%s" /B /ON /A-D) || (ECHO ?dir_empty?)]], sPath, sPath), fileutils.LUA_5_3)
+	local sFiles = string.getval(string.format([[@FOR /f "tokens=*" %%a in ('DIR /B /ON /A-D "%s" 2^>NUL') do @ECHO %%a]], sPath), fileutils.LUA_5_3)
 
 	---------
-	if (string.find(sFiles, "%?dir_empty%?$")) then
+	if (string.find(sFiles, "%?dir_empty%?$") or string.empty(sFiles)) then
 		return {} end
 
 	---------
@@ -260,9 +260,7 @@ end
 
 fileutils.pathexists = function(sPath)
 
-	local bExists = (string.getval(string.format([[
-		IF EXIST "%s" (ECHO 1 {file_out}) ELSE (ECHO 0 {file_out})
-	]], sPath), fileutils.LUA_5_3, fileutils.LUA_5_3) == "1")
+	local bExists = (string.getval(string.format([[IF EXIST "%s" (ECHO 1 {file_out}) ELSE (ECHO 0 {file_out})]], sPath), fileutils.LUA_5_3, fileutils.LUA_5_3) == "1")
 
 	---------
 	return bExists
@@ -328,9 +326,7 @@ fileutils.isdir = function(sPath)
 		return false end
 
 	---------
-	local bDirectory = (string.getval(string.format([[
-		IF EXIST "%s\*" (ECHO 1 {file_out}) ELSE (ECHO 0 {file_out})
-	]], sPath), fileutils.LUA_5_3, fileutils.LUA_5_3) == "1")
+	local bDirectory = (string.getval(string.format([[IF EXIST "%s\*" (ECHO 1 {file_out}) ELSE (ECHO 0 {file_out})]], sPath), fileutils.LUA_5_3, fileutils.LUA_5_3) == "1")
 
 	---------
 	return bDirectory
@@ -378,7 +374,7 @@ end
 
 fileutils.getdir_tree = function(sPath, bFullPath)
 
-	print("Dir-> " .. sPath)
+	-- print("Dir-> " .. sPath)
 	if (not sPath) then
 		return end
 	
@@ -400,7 +396,7 @@ fileutils.getdir_tree = function(sPath, bFullPath)
 	
 	---------
 	for i, sFile in pairs(aFiles) do
-		print("File " .. sPath .. " -> " .. sFile)
+		-- print("File " .. sPath .. " -> " .. sFile)
 		if (bFullPath) then
 			table.insert(aFolderData, sPath .. "/" .. sFile) else
 			table.insert(aFolderData, sFile) end
@@ -408,7 +404,7 @@ fileutils.getdir_tree = function(sPath, bFullPath)
 	
 	---------
 	for i, sFolder in pairs(aFolders) do
-		print("Folder " .. sPath .. " -> " .. sFolder)
+		-- print("Folder " .. sPath .. " -> " .. sFolder)
 		aFolderData[sFolder] = fileutils.getdir_tree((sPath .. "/" .. sFolder), true)
 	end
 

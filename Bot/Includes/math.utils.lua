@@ -100,6 +100,20 @@ math.calctime = function(s)
 	return (math.t(c) > 0 and (c .. "c: ") or "") .. (math.t(y) > 0 and (y .. "y: ") or "") .. d .. "d: " .. h .. "h: " .. m .. "m: " .. s .. "s";
 end
 
+---------------------------
+-- math.increase
+
+math.increase = function(hVar, iAdd)
+	return (checkNumber(hVar, 0) + checkNumber(iAdd, 0))
+end
+
+---------------------------
+-- math.decrease
+
+math.decrease = function(hVar, iRem)
+	return (checkNumber(hVar, 0) - checkNumber(iRem, 0))
+end
+
 -------------------
 mathutils.t = math.t
 mathutils.div = math.div

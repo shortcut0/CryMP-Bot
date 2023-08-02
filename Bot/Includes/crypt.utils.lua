@@ -136,7 +136,7 @@ crypt.encrypt = function(sString, sKey, iCharSet)
 		iBinaryAdded = iBinary + (iCryptAdd + i + iCryptAdd_Extra)
 		
 		---------
-		FinchLog("[E] iBinaryAdded --> %d (+%d)", iBinaryAdded, (iCryptAdd + i + iCryptAdd_Extra))
+		--FinchLog("[E] iBinaryAdded --> %d (+%d)", iBinaryAdded, (iCryptAdd + i + iCryptAdd_Extra))
 		
 		---------
 		iCharIndex = tonumber(math.loopindex(iBinaryAdded, iCharSetLen)[2])
@@ -144,14 +144,14 @@ crypt.encrypt = function(sString, sKey, iCharSet)
 			iCharIndex = 1 end
 		
 		---------
-		FinchLog("[E] Index --> %d for char %s", iCharIndex, sChar)
+		--FinchLog("[E] Index --> %d for char %s", iCharIndex, sChar)
 		
 		---------
 		sCrypt = sCrypt .. aCharSet[iCharIndex]
 	end
 
-	System.LogAlways("Encrypted -> " .. tostring(sCrypt))
-	System.LogAlways("EncryptedBinary -> " .. string.hexencode(sCrypt))
+	--System.LogAlways("Encrypted -> " .. tostring(sCrypt))
+	--System.LogAlways("EncryptedBinary -> " .. string.hexencode(sCrypt))
 
 	---------
 	return string.hexencode(sCrypt, 4)
@@ -296,7 +296,7 @@ crypt.decrypt = function(sString, sKey, iCharSet)
 			end
 
 			---------
-			FinchLog("[D] Index --> %d", iBinaryIndex)
+			--FinchLog("[D] Index --> %d", iBinaryIndex)
 
 			---------
 			sCrypt = sCrypt .. self.GetBinaryChar(iBinaryIndex)
@@ -311,13 +311,13 @@ crypt.decrypt = function(sString, sKey, iCharSet)
 		return "-1"
 	end
 
-	System.LogAlways("EncryptB -> " .. tostring(sCrypt))
+	--System.LogAlways("EncryptB -> " .. tostring(sCrypt))
 	---------
 	sCrypt = "0x" .. sCrypt
 	sCrypt = string.hexdecode(sCrypt)
 
 	---------
-	System.LogAlways("Decrypted -> " .. sCrypt)
+	--System.LogAlways("Decrypted -> " .. sCrypt)
 
 	---------
 	return sCrypt

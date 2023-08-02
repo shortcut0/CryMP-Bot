@@ -216,17 +216,29 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh)
 	local fRayCheck_S = System.RayTraceCheck
 	if (not luautils.isFunction(fRayCheck_S)) then
 		return false end
+		
+	------------
+	--Physics.RayWorldIntersection(vSource, vDir, iDistance, fFlags, idIgnore, nil, g_HitTable)
+	local fBotRayCheck_R = Game.Bot_RayWorldIntersection
+	if (not luautils.isFunction(fBotRayCheck_R)) then
+		fBotRayCheck_R = GetDummyFunc() end
+		
+	------------
+	local fBotRayCheck_C = Game.Bot_RayTraceCheck
+	if (not luautils.isFunction(fBotRayCheck_C)) then
+		fBotRayCheck_C = GetDummyFunc() end
 	
 	------------
 	self.VALIDATION_FUNC = function(vSrc, vTgt, iP2, iP3)
-		-- or fRayCheck_P(vSrc, vector.modify(vTgt, "z", 0.25, true), iP2, iP3) or fRayCheck_P(vector.modify(vSrc, "z", 0.25, true), vTgt, iP2, iP3)
-		local bVisible = 
+	
+		local iDist = vector.distance(vSrc, vTgt)
+		local bVisible =
+			(iDist < 3 and fBotRayCheck_C(vSrc, vTgt, iP2, iP3)) or 
 			fRayCheck_P(vector.modify(vSrc, "z", 0.15, true), vector.modify(vTgt, "z", 0.15, true), iP2, iP3) or
 			fRayCheck_P(vSrc, vector.modify(vTgt, "z", 0.25, true), iP2, iP3) or
 			fRayCheck_P(vector.modify(vSrc, "z", 0.25, true), vTgt, iP2, iP3) or
 			fRayCheck_P(vector.modify(vSrc, "z", 0.25, true), vector.modify(vTgt, "z", 0.25, true), iP2, iP3)
-			--fRayCheck_S(vSrc, vTgt, 1, 1)
-			
+		
 		return ( bVisible )
 	end
 	

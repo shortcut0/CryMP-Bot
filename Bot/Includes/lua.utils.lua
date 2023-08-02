@@ -177,6 +177,33 @@ luautils.checkFunc = function(fFunc, hDefault, ...)
 	return hReturn
 end
 
+---------------------------
+-- luautils.checkArray
+
+luautils.checkArray = function(aArray, hDefault)
+
+	-------------
+	if (not isArray(aArray)) then
+		if (isArray(hDefault)) then
+			return hDefault else
+			return { hDefault } end 
+	end
+		
+	-------------
+	return aArray
+end
+
+---------------------------
+-- luautils.getDummyFunc
+
+luautils.getDummyFunc = function()
+
+	-------------
+	return function()
+	end
+
+end
+
 -------------------
 getrandom = luautils.random
 isNull = luautils.isNull
@@ -194,7 +221,9 @@ checkNumber = luautils.checkNumber
 checkNum = luautils.checkNumber
 checkVar = luautils.checkVar
 checkFunc = luautils.checkFunc
+checkArray = luautils.checkArray
 compNumber = luautils.compNumber
+GetDummyFunc = luautils.getDummyFunc
 
 -------------------
 return luautils

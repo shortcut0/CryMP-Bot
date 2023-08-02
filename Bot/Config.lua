@@ -17,12 +17,14 @@ Config = {
 	
 	-- Name of the current server
 	CurrentServer = "116.203.92.129:50002"; -- tox PS
-	CurrentServer = "116.203.92.129:55001"; -- atom 
 	CurrentServer = "116.203.92.129:64087"; -- something
 	CurrentServer = "94.16.110.182:64005"; -- alien
-	CurrentServer = "127.0.0.1:66666:2020"; -- local
 	CurrentServer = "116.203.92.129:50001"; -- tox IA
+	CurrentServer = "127.0.0.1:66666:2020"; -- local
+	CurrentServer = "5.9.20.51:64089"; -- gercry IA
+	CurrentServer = "178.190.213.69:64087"; -- sox elite
 	CurrentServer = "116.203.92.129:64088"; -- something_pro
+	CurrentServer = "116.203.92.129:55001"; -- atom 
 	
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers
@@ -36,6 +38,10 @@ Config = {
 
 	-- Check if server can be joined
 	ValidateSever = false;
+	
+	----------------------------------------------
+	-- If false, bot will not attack players
+	BotHostility = false; 
 	
 	----------------------------------------------
 	-- If false, bot will not send chat messages
@@ -63,7 +69,7 @@ Config = {
 	
 	----------------------------------------------
 	-- Blacklist for items
-	BotBlacklist = { ["socom"] = true };
+	BotBlacklist = { ["socom"] = true, ["Shotgun"] = true };
 	
 	----------------------------------------------
 	-- Buy items in buy zones
@@ -196,7 +202,7 @@ Config = {
 	NoSprinting = false;
 	
 	-- if true, bot will use WIP circlejumping
-	BotCircleJumping = true;
+	BotCircleJumping = false;
 	
 	----------------------------------------------
 	-- Randomize path pos (Experimental)

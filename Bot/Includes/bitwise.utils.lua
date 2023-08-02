@@ -125,6 +125,13 @@ bit.RightShift = function(x, iBy)
 	return (math.floor(x / 2 ^ iBy))
 end
 
+---------------------------
+-- bit.Next
+
+bit.Next = function(x)
+	return (x * 2)
+end
+
 -------------------
 BitXOR = bit.XOR
 BitOR = bit.OR
@@ -132,6 +139,7 @@ BitNOT = bit.NOT
 BitAND = bit.AND
 BitShift = bit.RightShift
 BitLeftShift = bit.LeftShift
+BitNext = bit.Next
 
 -------------------
 return bit

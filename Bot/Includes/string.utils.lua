@@ -21,6 +21,7 @@ string.INVALID = "<Invalid>"
 string.ERROR = "<Error>"
 string.WARNING = "<Warning>"
 string.FAILED = "<Failed>"
+string.TBFAILED = "<Tb Failed>"
 string.EMPTY = "<Empty>"
 
 string.COLOR_CODE = "%$%d"
@@ -70,14 +71,16 @@ string.makefilename = function(name)
 	local tempFile = io.open(tempName, "r")
 
 	local retries = 0
-	while tempFile do
+	while (tempFile) 
+	do
 		retries = retries + 1
 		tempFile:close()
 		tempName = string.new(string.removefileextension(name)) .. " (" .. retries .. ")" .. ext--string.getfileextension(name)
 		tempFile = io.open(tempName, "r")
 	end
 	
-	if (tempFile) then tempFile:close() end
+	if (tempFile) then 
+		tempFile:close() end
 	
 	return tempName
 end
@@ -94,63 +97,106 @@ string.openfile = function(name, options)
 end
 
 ---------------------------
--- string.getvar
+-- string.getvar (eg: cd)
 
 string.getvar = function(sVar, bNoHandleMethod)
 
 	local sResult = ""
-	if (not bNoHandleMethod) then
+	if (not bNoHandleMethod and string.LUA_POPEN_SUPPORTED) then
 		-- The correct approach
 		local handle = io.popen("echo %" .. sVar .. "%")
-		if (not handle) then
-			return
+		if (handle) then
+			sResult = handle:read"*all"
+			handle:close()
 		end
-		local sResult = handle:read"*l"
-		handle:close()
 	else
 		-- The shitty approach
 		local sFile = string.makefilename("_echo_out_temp.txt")
 		os.execute("echo %" .. sVar .. "% > \"" .. sFile .. "\"")
 		local hFile = io.open(sFile, "r")
-		sResult = hFile:read"*all"
-		hFile:close()
+		if (hFile) then
+			sResult = hFile:read"*all"
+			hFile:close() end
+
 		os.execute("del \"" .. sFile .. "\"")
 	end
 	
-	return sResult
+	return string.gsub(sResult, "\n$", "")
 end
 
 ---------------------------
--- string.getval
+-- string.getval (eg: dir/f)
 
-string.getval = function(sVal, bNoHandleMethod)
+string.getval = function(sVal, bNoHandleMethod, bUseFileOut)
 
+	---------
 	local sResult = ""
-	if (not bNoHandleMethod) then
-		-- The correct approach
-		local handle = io.popen(sVal)
-		if (not handle) then
-			return
-		end
-		local sResult = handle:read"*l"
-		handle:close()
+	local sCommand = sVal
+	
+	---------
+	if (not bNoHandleMethod and string.LUA_POPEN_SUPPORTED) then
+	
+		------
+		if (not bUseFileOut and string.find(sCommand, "{file_out}")) then
+			sCommand = string.gsub(sCommand, "{file_out}", "") end
+		
+		------
+		local handle = io.popen(string.rtws(sCommand))
+		if (handle) then
+			sResult = handle:read"*all"
+			handle:close() end
 	else
 		-- The shitty approach
-		local sFile = string.makefilename("temp_read")
-		os.execute(sVal .. " >> \"" .. sFile .. "\"")
+		local sFile = string.makefilename(string.gettempdir() .. "\\temp_read")
+		if (bUseFileOut and string.find(sCommand, "{file_out}")) then
+			sCommand = string.gsub(sCommand, "{file_out}", (">> \"" .. sFile .. "\"")) else 
+			sCommand = (string.gsub(sCommand, "{file_out}", "") .. " >> \"" .. sFile .. "\"")
+		end
+		
+		------
+		-- print("sCommand -> '" .. sCommand .. "'")
+		-- PuttyLog("CommandLine: " .. sCommand)
+		
+		------
+		os.execute(string.rtws(sCommand))
 		local hFile = io.open(sFile, "r")
-		sResult = hFile:read"*all"
-		hFile:close()
+		if (hFile) then
+			-- print("file ok")
+			sResult = hFile:read"*all"
+			hFile:close() end
+
+		------
 		os.execute("del \"" .. sFile .. "\"")
 	end
 	
-	return sResult
+	---------
+	sResult = string.gsub(sResult, "(\n+)$", "")
+	sResult = string.gsub(sResult, "(%s+)$", "")
+	
+	---------
+	-- print("res --> '" .. sResult .. "'")
+	
+	---------
+	return (sResult)
+end
+
+---------------------------
+-- string.rtws
+
+string.rtws = function(sString) 
+	local sCleaned = string.new(sString)
+	
+	sCleaned = string.gsub(sCleaned, "(\n+)$", "")
+	sCleaned = string.gsub(sCleaned, "(\t+)$", "")
+	sCleaned = string.gsub(sCleaned, "(%s+)$", "")
+	
+	return sCleaned
 end
 
 ---------------------------
 -- string.getworkingdir
 
-string.getworkingdir = function() return os.getvar("cd") end
+string.getworkingdir = function() return string.getvar("cd") end
 
 ---------------------------
 -- string.getuserdir
@@ -229,7 +275,7 @@ end
 ---------------------------
 -- string.rspace
 
-string.lspace = function(s, space, sClean)
+string.lspace = function(s, space, sClean, sChar)
 
 	------------
 	local iLen = string.len(s)
@@ -237,14 +283,14 @@ string.lspace = function(s, space, sClean)
 		iLen = string.len(string.gsub(s, sClean, "")) end
 		
 	------------
-	return string.rep(" ", space - iLen) .. s
+	return string.rep(checkVar(sChar, " "), space - iLen) .. s
 
 end
 
 ---------------------------
 -- string.mspace
 
-string.mspace = function(s, space, s_len_div, bClean)
+string.mspace = function(s, space, s_len_div, bClean, sChar)
 
 	------------
 	local iLen = string.len(s)
@@ -256,14 +302,14 @@ string.mspace = function(s, space, s_len_div, bClean)
 	local side_len = math.floor((space / 2) - (s_len / 2));
 	
 	local add = side_len * 2 + s_len < space;
-	return string.rep(" ", math.floor(side_len)) .. s .. string.rep(" ", add and side_len + 1 or side_len);
+	return string.rep(checkVar(sChar, " "), math.floor(side_len)) .. s .. string.rep(checkVar(sChar, " "), add and side_len + 1 or side_len);
 
 end
 
 ---------------------------
 -- string.lspace
 
-string.rspace = function(s, space, sClean)
+string.rspace = function(s, space, sClean, sChar)
 
 	------------
 	local iLen = string.len(s)
@@ -271,7 +317,7 @@ string.rspace = function(s, space, sClean)
 		iLen = string.len(string.gsub(s, sClean, "")) end
 		
 	------------
-	return s .. string.rep(" ", space - iLen)
+	return s .. string.rep(checkVar(sChar, " "), space - iLen)
 
 end
 
@@ -299,6 +345,46 @@ string.repeats = function(s, iRepeats)
 end
 
 ---------------------------
+-- string.replace
+
+string.replace = function(s, iLen, sRepeater)
+
+	--------
+	if (not isNumber(iLen)) then
+		return s end
+		
+	--------
+	if (iLen < 1) then
+		return s end
+
+	--------
+	local sResult = string.rep(checkVar(sRepeater, " "), (string.len(s) - iLen)) .. tostring(s)  
+
+	--------
+	return sResult
+end
+
+---------------------------
+-- string.lreplace
+
+string.lreplace = function(s, iLen, sRepeater)
+
+	--------
+	if (not isNumber(iLen)) then
+		return s end
+		
+	--------
+	if (iLen < 1) then
+		return s end
+
+	--------
+	local sResult = tostring(s) .. string.rep(checkVar(sRepeater, " "), (string.len(s) - iLen))  
+
+	--------
+	return sResult
+end
+
+---------------------------
 -- string.formatex
 
 string.formatex = function(s, ...)
@@ -312,19 +398,140 @@ string.formatex = function(s, ...)
 end
 
 ---------------------------
+-- string.count
+
+string.count = function(s, sFind)
+
+	--------
+	local sTemp, iOccurences = string.gsub(s, sFind, "")
+
+	--------
+	return (iOccurences)
+end
+
+---------------------------
+-- string.findex
+
+string.findex = function(s, ...)
+
+	--------
+	local aFind = { ... }
+	if (table.count(aFind) == 0) then
+		return end
+
+	--------
+	for i, sFind in pairs(aFind) do
+		local a, b = string.find(s, sFind)
+		if (a or b) then
+			return a, b end
+	end
+
+	--------
+	return
+end
+
+---------------------------
+-- string.findand
+
+string.findand = function(s, ...)
+
+	--------
+	local aFind = { ... }
+	if (table.count(aFind) == 0) then
+		return end
+
+	--------
+	local bFound = true
+	for i, sFind in pairs(aFind) do
+		local a, b = string.find(s, sFind)
+		bFound = (bFound and (a and b))
+	end
+
+	--------
+	return bFound
+end
+
+---------------------------
+-- string.matchex
+
+string.matchex = function(s, ...)
+
+	--------
+	local aMatch = { ... }
+	if (table.count(aMatch) == 0) then
+		return end
+
+	--------
+	for i, sMatch in pairs(aMatch) do
+		local a = string.match(s, sMatch)
+		if (a) then
+			return a end
+	end
+
+	--------
+	return
+end
+
+---------------------------
+-- string.matchand
+
+string.matchand = function(s, ...)
+
+	--------
+	local aMatch = { ... }
+	if (table.count(aMatch) == 0) then
+		return end
+
+	--------
+	local bMatched = true
+	for i, sMatch in pairs(aMatch) do
+		local a = string.match(s, sMatch)
+		bMatched = (bMatched and (a))
+	end
+
+	--------
+	return bMatched
+end
+
+---------------------------
+-- string.gsubex
+
+string.gsubex = function(s, aReplace, sReplacer)
+
+	--------
+	if (not sReplacer) then
+		error("no replacer") end
+
+	--------
+	local aReplace = checkArray(aReplace, { aReplace })
+
+	--------
+	local sNew = string.new(s)
+	for i, sReplace in pairs(aReplace) do
+		local sReplacer_ = sReplacer
+		sReplacer_ = string.gsub(sReplacer_, "{%%~0}", i)
+		sReplacer_ = string.gsub(sReplacer_, "{%%~1}", sReplace)
+		
+		sNew = string.gsub(sNew, sReplace, sReplacer_)
+	end
+
+	--------
+	return sNew
+end
+
+---------------------------
 -- string.clean
 
-string.clean = function(s, pattern)
+string.clean = function(s, sPattern)
 	local s = string.new(s)
-	local result = "";
-	local cleanPattern = pattern or "[a-zA-Z0-9_'{}\"%(%) %*&%%%$#@!%?/\\;:,%.<>%-%[%]%+]";
+	local sCleaned = "";
+	local sCleanedPattern = (sPattern or "[a-zA-Z0-9_'{}\"%(%) %*&%%%$#@!%?/\\;:,%.<>%-%[%]%+]")
 	for i = 1, string.len(s) do
-		local s = string.sub(s, i, i);
-		if(s and string.match(s, cleanPattern))then
-			result = result .. s;
-		end;
-	end;
-	return result;
+		local s = string.sub(s, i, i)
+		if (s and string.match(s, sCleanedPattern)) then
+			sCleaned = sCleaned .. s end
+	end
+	return sCleaned
 
 end
 
@@ -480,8 +687,8 @@ string.hex = function(iNumber, iLen)
 	if (iLen == nil) then
 		iLen = 4 end
 	
-	local sFormat = "%" .. iLen .. "x"
-	return string.upper(string.gsub(string.format(sFormat, iNumber), " ", 0))
+	local sFormat = "%0" .. iLen .. "x"
+	return string.upper(string.format(sFormat, iNumber))
 end
 
 ---------------------------
@@ -556,6 +763,64 @@ string.trimright = function(sString, iRight)
 end
 
 ---------------------------
+-- string.ridtrail
+
+string.ridtrail = function(sString, sChar)
+
+	---------
+	return string.gsub(sString,  string.escape(sChar) .. "$", "")
+end
+
+---------------------------
+-- string.ridtrailex
+
+string.ridtrailex = function(sString, ...)
+
+	---------
+	local aChars = { ... }
+	if (table.count(aChars) == 0) then
+		return sString end
+		
+	---------
+	local sResult = sString
+	for i, sChar in pairs(aChars) do
+		sResult = string.gsub(sResult, string.escape(sChar) .. "$", "")
+	end
+	
+	---------
+	return sResult
+end
+
+---------------------------
+-- string.ridlead
+
+string.ridlead = function(sString, sChar)
+
+	---------
+	return string.gsub(sString, "^" .. string.escape(sChar), "")
+end
+
+---------------------------
+-- string.ridleadex
+
+string.ridleadex = function(sString, ...)
+
+	---------
+	local aChars = { ... }
+	if (table.count(aChars) == 0) then
+		return sString end
+		
+	---------
+	local sResult = sString
+	for i, sChar in pairs(aChars) do
+		sResult = string.gsub(sResult, "^" .. string.escape(sChar), "")
+	end
+	
+	---------
+	return sResult
+end
+
+---------------------------
 -- string.fileread
 
 string.bytestring = function(sString)
@@ -584,6 +849,27 @@ string.tobytes = function(sString)
 
 	---------
 	return aBytes
+end
+
+---------------------------
+-- string.frombytes
+
+string.frombytes = function(aBytes)
+	
+	---------
+	local sString = ""
+	
+	---------
+	if (isArray(aBytes)) then
+		for i, iBytes in pairs(aBytes) do
+			if (isNumber(iBytes) and (iBytes >= 0 and iBytes <= 255)) then
+				sString = sString .. string.char(iBytes)
+			end
+		end
+	end
+
+	---------
+	return sString
 end
 
 ---------------------------
@@ -625,6 +911,132 @@ string.empty = function(sString)
 	return (string.stripws(sString) == "")
 end
 
+---------------------------
+-- string.escape
+
+string.escape = function(sString, aExtra)
+	
+	---------
+	if (isNull(sString)) then
+		return "" end
+		
+	---------
+	local aEscapes = {
+		"(", ")",
+		"[", "]",
+		"+", "-", "*", 
+		"?", "%", "$", "^"
+	}
+	
+	---------
+	if (aExtra) then
+		aEscapes = table.append(aEscapes, aExtra) end
+	
+	---------
+	local sEscaped = string.new(sString)
+	for i, sChar in pairs(aEscapes) do
+		sEscaped = string.gsub(sEscaped, ("%" .. sChar), ("%%%" .. sChar))
+	end
+	
+	---------
+	return string.gsub(sEscaped, "(%%+)", "%%")
+end
+
+---------------------------
+-- string.bytesuffix
+
+string.bytesuffix = function(iBytes)
+	
+	---------
+	local aSuffixes = { "bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB", "HB", "BB" }
+	local iIndex = 1
+	while (iBytes > 1023 and iIndex <= 10) 
+	do
+		iBytes = iBytes / 1024
+		iIndex = iIndex + 1
+	end
+	
+	---------
+	if (not iNullCount) then
+		if (iIndex == 1) then iNullCount = 0 else
+			iNullCount = 2
+		end
+	end
+	
+	---------
+	local sBytes = string.format(string.format("%%0.%df%%s", iNullCount), iBytes, ((not bNoSuffix) and (" " .. aSuffixes[iIndex]) or ""))
+	return sBytes
+	
+end
+
+---------------------------
+-- string.numsuffix
+
+string.numsuffix = function(iNumber)
+	
+	---------
+	local aSuffixes = { ' ', 'k', 'M', 'B', 'T', ' quadrillion', ' quintillion', ' sextillion', ' septillion', ' octillion', ' nonillion', ' decillion' }
+	local iIndex = 1
+	while (iNumber >= 1000 and iIndex <= 12) 
+	do
+		iNumber = iNumber / 1000
+		iIndex = iIndex + 1
+	end
+	
+	---------
+	if (not iNullCount) then
+		if (iIndex == 1) then 
+			iNullCount = 0 else
+			iNullCount = 2
+		end
+	end
+	
+	---------
+	local sBytes = string.format(string.format("%%0.%df%%s", iNullCount), iNumber, ((not bNoSuffix) and ("" .. aSuffixes[iIndex]) or ""))
+	return sBytes
+	
+end
+
+---------------------------
+-- string.dotnumber
+
+string.dotnumber = function(iNumber)
+	
+	---------
+	if (iNumber <= 1000) then
+		return iNumber end
+	
+	---------
+	local sDotNum = string.gsub(iNumber, "%d%d%d", "%1.")
+	sDotNum = string.ridtrail(sDotNum, ".")
+	
+	---------
+	return (sDotNum)
+	
+end
+
+
+---------------------------
+-- string.ispopensupported
+
+string.ispopensupported = function(iBytes)
+	
+	---------
+	local f = function()
+		local hHandle = io.popen("dir")
+		if (hHandle) then
+			hHandle:close() end
+	end
+	
+	---------
+	local bOk, sErr = pcall(f)
+	if (not bOk and (string.find(sErr, "'popen' not supported"))) then
+		return false end
+		
+	---------
+	return true
+end
+
 
 -------------------
 stringutils.hex = string.hex
@@ -659,6 +1071,11 @@ stringutils.getdomainname = string.getdomainname
 stringutils.getworkingdir = string.getworkingdir
 stringutils.getfileextension = string.getfileextension
 stringutils.removefileextension = string.removefileextension
+
+-------------------
+
+string.LUA_POPEN_SUPPORTED = string.ispopensupported()
+string.WORKING_DIR = string.getworkingdir()
 
 -------------------
 return stringutils

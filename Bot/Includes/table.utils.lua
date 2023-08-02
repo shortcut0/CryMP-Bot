@@ -94,7 +94,7 @@ end
 table.shallowClone = function(t)
 	
 	local aResult = {}
-	for k, v in pairs(t) do
+	for k, v in pairs(t or{}) do
 		aResult[k] = v end
 
 	return aResult
@@ -344,6 +344,69 @@ table.getmax = function(t, sKey)
 end
 
 ---------------------------
+-- table.find
+
+table.find = function(t, hFind)
+	local c = 0
+	for i, v in pairs(t) do
+		c = c + 1
+		if (i == hFind) then
+			return v end
+	end
+	 
+	return
+end
+
+---------------------------
+-- table.findex
+
+table.findex = function(t, hFind)
+	local c = 0
+	for i, v in pairs(t) do
+		c = c + 1
+		if (i == hFind or v == hFind) then
+			return v end
+	end
+	 
+	return
+end
+
+---------------------------
+-- table.findall
+
+table.findall = function(t, ...)
+
+	local aFind = { ... }
+	if (table.count(aFind) == 0) then
+		return end
+
+	for i, v in pairs(aFind) do
+		if (not table.find(t, v)) then
+			return false end
+	end
+	 
+	return true
+end
+
+---------------------------
+-- table.findany
+
+table.findany = function(t, ...)
+
+	local aFind = { ... }
+	if (table.count(aFind) == 0) then
+		return end
+
+	for i, v in pairs(aFind) do
+		local hFound = table.find(t, v)
+		if (hFound) then
+			return hFound end
+	end
+	 
+	return
+end
+
+---------------------------
 -- table.index
 
 table.index = function(t, iIndex)
@@ -449,15 +512,12 @@ table.tostring = function(aArray, sTab, sName, aDone)
 	if (sTab == nil) then
 		sTab = "" end
 		
-	if (aDone == nil) then
-		aDone = {} end
-		
 	if (sName == nil) then
 		sName = tostring(aArray) .. " = " end
 		
 	local sRes = sTab .. sName .. "{\n"
 	local sTabBefore = sTab
-	sTab = sTab .. "\t"
+	sTab = sTab .. " "
 	
 	for i, v in pairs(aArray or {}) do
 		local vType = type(v)
@@ -466,7 +526,7 @@ table.tostring = function(aArray, sTab, sName, aDone)
 			vKey = "[\"" .. tostring(i) .. "\"] = " end
 				
 		if (vType == "table") then
-			sRes, aDone = sRes .. sTab .. vKey .. (table.tostring(v, sTab .. sTab, i, aArray))
+			sRes = sRes .. (table.tostring(v, sTab, "[\"" .. i .. "\"] = ", aArray))
 		elseif (vType == "number") then
 			sRes = sRes .. sTab .. vKey .. string.format("%f", v)
 		elseif (vType == "string") then

@@ -1,40 +1,5 @@
--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------
 -- Crysis 1 CryMP-Bot - v0.1a | Written by .R | (c) 2021
--------------------------------------------------------------------------------------------------------------
--- Do NOT reupload ANYWHERE without MY PERMISSION. Seriously. ur ded otherwise
--------------------------------------------------------------------------------------------------------------
--- FILE: FINCH.lua
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
---
--- NOTE: THIS IS JUST AN EARLY BETA VERSION (0.1gigachad) OF THE BOT. 
--------------------------------------------------------------------------------------------------------------
 
 -------------------------------
 System.ClearConsole()
@@ -55,6 +20,7 @@ FinchLog = function(msg, ...)
 	if (...) then
 		msg = string.format(msg, ...)
 	end
+	System.LogAlways("-> " .. debug.traceback())
 	return System.LogAlways(string.format("$9[$7FinchPower$9] %s", string.format(msg, ...)))
 end
 
@@ -101,7 +67,7 @@ math.randomseed(os.time())
 function SetError(name, code)
 	LAST_ERROR_NAME = name;
 	LAST_ERROR = code;
-end;
+end
 
 
 
@@ -123,18 +89,9 @@ if (os.OldExecute == nil) then
 	os.OldExecute = os.execute end
 	
 os.execute = function(...)
-	FinchLog("Executing CMD: " .. table.concat({ ... }, " "));		
+	-- FinchLog("Executing CMD: " .. string.escape(table.concat({ ... }, " ")));		
 	return os.OldExecute(...)
 end
-
--------------------------------
-table.getnum = function(self)
-	local c = 0;
-	for i, v in pairs(self or{}) do
-		c = c + 1;
-	end;
-	return c;
-end;
 
 
 -------------------------------
@@ -152,6 +109,12 @@ FinchPower = {
 	Init = function(self)
 	
 		FinchLog("Initializing FinchPower")
+	
+		-------------------
+		local iPID = Game.GetGameProcessId()
+		if (iPID) then
+			math.randomseed(iPID) else
+			FinchLog("Failed to Retrive current Process ID") end
 	
 		-------------------
 		-- Add Commands
@@ -299,7 +262,7 @@ FinchPower = {
 			return false end
 			
 		-----------------------
-		bOk, hLib = self:LoadFile(sLibPath .. "\\bit.utils.lua")
+		bOk, hLib = self:LoadFile(sLibPath .. "\\bitwise.utils.lua")
 		if (not bOk) then
 			return false end
 			
@@ -310,6 +273,11 @@ FinchPower = {
 			
 		-----------------------
 		bOk, hLib = self:LoadFile(sLibPath .. "\\table.utils.lua")
+		if (not bOk) then
+			return false end
+			
+		-----------------------
+		bOk, hLib = self:LoadFile(sLibPath .. "\\file.utils.lua")
 		if (not bOk) then
 			return false end
 			
@@ -384,13 +352,18 @@ FinchPower = {
 		end	
 		
 		-----------------------
-		FinchLog("Loaded %d Configuration entries", table.getnum(Config))
+		FinchLog("Loaded %d Configuration entries", table.count(Config))
 		
 		-----------
 		return true
 	end;
 	------------------------------
 	LoadLauncherConfig = function(self)
+	
+	
+		----------------
+		-- fixme: enable
+		do return true end
 	
 		local function ValidateSuit(sMode)
 			local aRealBones = {

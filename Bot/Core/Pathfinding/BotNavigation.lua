@@ -560,11 +560,18 @@ BotNavigation.CanSeeNextNode = function(self)
 	if (not iNode) then
 		return false end
 		
-	if (iNode == self.CURRENT_PATH_SIZE) then
+	if (iNode >= self.CURRENT_PATH_SIZE) then
 		return false end
 		
-	local vNode = self.CURRENT_PATH_ARRAY[(iNode + 1)]
-	return self:IsNodeVisible(vNode)
+	local vNode = self.CURRENT_PATH_ARRAY[(iNode + 0)]
+	local vNextNode = self.CURRENT_PATH_ARRAY[(iNode + 1)]
+	
+	local iZDiff = (vNode.z - vNextNode.z)
+	if (iZDiff > 0.175 or iZDiff < -0.175) then
+		self:Log(0, "Ignoring next node because its ELEVATED!!")
+		return false end
+	
+	return self:IsNodeVisible(vNextNode)
 end
 
 ---------------------------
@@ -616,8 +623,8 @@ BotNavigation.IsNodeVisible_Handle = function(self, vSource, vTarget, sHandle, i
 BotNavigation.IsNodeVisible = function(self, vNode, bRayCheck)
 	
 		-----------
-		local vDir = Bot:GetViewCameraDir()
-		local vPos = Bot:GetViewCameraPos()
+		local vDir = Bot:GetViewCameraDir(1) -- NOT ACCURATE !! 
+		local vPos = Bot:GetViewCameraPos(1) -- NOT ACCURATE !!
 		local iDistance = vector.distance(vNode, vPos)
 	
 		-----------
@@ -794,6 +801,13 @@ BotNavigation.IsNextNodeCloser = function(self, iNode)
 		-----------
 		local iDistance_C = vector.distance(hCurrentNode, vPosition)
 		local iDistance_N = vector.distance(hNextNode, vPosition)
+		
+		-----------
+		local iZDiff = hNextNode.z - hCurrentNode.z
+		if ((iZDiff > 0.1 or iZDiff < -0.1)) then
+			self:Log(0, "Ignoring Next node despite it being closer (ITS EVELVATED!)")
+			return false
+		end
 		
 		-----------
 		return self:IsNodeVisible(hNextNode) and (iDistance_N < iDistance_C)
@@ -1070,6 +1084,10 @@ BotNavigation.CheckIfPlayerMoved = function(self, vGoalPos, idPlayer, iThreshold
 -- GetClosestAlivePlayer
 
 BotNavigation.GetClosestAlivePlayer = function(self, bRetry)
+	
+		-------------
+		if (not bot_hostility) then
+			return end
 	
 		-------------
 		if (self.CURRENT_PATH_RESETTIME and _time - self.CURRENT_PATH_RESETTIME < 3) then
