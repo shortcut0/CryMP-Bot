@@ -14,7 +14,12 @@ BotAPI = {
 
 -------------------
 
-BotAPI.connectingPlayers = {}
+SYSTEM_INTERRUPTED = nil
+SYSTEM_INTERRUPTED_LAST = nil
+
+-------------------
+
+BotAPI.CONNECTING_PLAYERS = {}
 BotAPI.Defaults = {
 	-------------------
 	ClStartWorking = function(self, entityId, workName)
@@ -38,24 +43,66 @@ BotAPI.Defaults = {
 BotAPI.Init = function(self)
 	
 	---------------
-	BotAPILog("BotAPI.Init()")
+	BotAPILog("BotAPI.Init() !")
 	
 	---------------
-	self:PatchExploits()
+	self.Events:PatchExploits()
 	
 end
 
 -------------------
+-- LogSystemInterrupt
+
+BotAPI.LogSystemInterrupt = function(self)
+
+	---------------
+	if (SYSTEM_INTERRUPTED_LAST ~= nil and SYSTEM_INTERRUPTED_LAST == false and SYSTEM_INTERRUPTED == true) then
+		BotLog("<SYSTEM WAS INTERRUPTED>")
+	end
+
+	SYSTEM_INTERRUPTED_LAST = SYSTEM_INTERRUPTED
+end
+
+-------------------
+BotAPI.Events = {}
+
+-------------------
 -- OnTimer
 
-BotAPI.OnTimer = function(self, timerTime)
+BotAPI.Events.OnTimer = function(self, ...)
+
+	-----------
+	if (SYSTEM_INTERRUPTED) then
+		return
+	end
+
+	-----------
+	local bOk, sErr = pcall(self.HandleTimer, self, ...)
+	if (not bOk) then
+		SetError("Error in HandleTimer", tostring(sErr))
+		BotError(false)
+	end
+
+end
+
+-------------------
+-- HandleTimer
+
+BotAPI.Events.HandleTimer = function(self, timerTime)
+
+	-----------
+	if (SYSTEM_INTERRUPTED) then
+		return
+	end
+
+	-----------
+	BotMain:Wait()
+
+	-----------
 	if (Bot and Bot.PreOnTimer) then
 		Bot:PreOnTimer(timerTime)
 	end
-	
-	-----------
-	FinchPower:Wait()
-	
+
 	-----------
 	self:PatchExploits()
 end
@@ -63,7 +110,7 @@ end
 -------------------
 -- PatchExploits
 
-BotAPI.PatchExploits = function(self)
+BotAPI.Events.PatchExploits = function(self)
 
 	-----------
 	if (nCX) then
@@ -79,56 +126,82 @@ BotAPI.PatchExploits = function(self)
 		
 	-----------
 	if (g_gameRules) then
-		-- This Caused hang ? 
-		-- ...~
-		-- if (not g_gameRules.server.Old_RequestSpectatorTarget) then
-			-- g_gameRules.server.Old_RequestSpectatorTarget = g_gameRules.server.RequestSpectatorTarget end
-		
-		------
-		-- g_gameRules.server.RequestSpectatorTarget = function(self, entityId, iMode)	
-			-- if (iMode > 3 and iMode ~= 111) then
-				-- return FinchLog("Spectator Target Blocked >> " .. iMode) end
-			-- return g_gameRules.server.Old_RequestSpectatorTarget(self, entityId, iMode)
-		-- end
-		-- ~...
-		
-		--------
-		g_gameRules.Client.ClStartWorking = self.Defaults.ClStartWorking
-		g_gameRules.Client.ClStopWorking = self.Defaults.ClStopWorking
+		g_gameRules.Client.ClStartWorking = BotAPI.Defaults.ClStartWorking
+		g_gameRules.Client.ClStopWorking = BotAPI.Defaults.ClStopWorking
 	end
 end
 
 -------------------
 -- OnUpdate
 
-BotAPI.OnUpdate = function(self, frameTime) -- on frame
+BotAPI.Events.OnUpdate = function(self, frameTime) -- on frame
 	if (Config and not Config.System) then
 		return
 	end
-	
+
 	-----------
-	self:DoUpdate(frameTime)
+	BotAPI:LogSystemInterrupt()
+	if (SYSTEM_INTERRUPTED) then
+		return
+	end
+
+	-----------
+	local bOk, sErr = pcall(self.DoUpdate, self)
+	if (not bOk) then
+		SetError("Error in DoUpdate", sErr)
+		BotError(false)
+	end
 end
 
 -------------------
 -- DoUpdate
 
-BotAPI.DoUpdate = function(self, frameTime)
+BotAPI.Events.OnWallJump = function(self, hPlayer)
+	if (Bot) then
+		Bot:OnWallJump(hPlayer)
+	end
+end
+
+-------------------
+-- DoUpdate
+
+BotAPI.Events.OnNetworkLag = function(self, bLag)
+end
+
+-------------------
+-- DoUpdate
+
+BotAPI.Events.OnChatMessage = function(self, hSender, hReceiver, sMessage, iType)
+end
+
+-------------------
+-- DoUpdate
+
+BotAPI.Events.OnFlashbangBlind = function(self, hPlayer, iPower)
+end
+
+-------------------
+-- DoUpdate
+
+BotAPI.Events.DoUpdate = function(self, frameTime)
 
 	-----------
 	if (Bot and Bot.PreUpdate) then
-		Bot:PreUpdate(frameTime) end
+		Bot:PreUpdate(frameTime)
+	else
+	--	BotLogError("No update function in BotMain.lua")
+	end
 	
 	-----------
-	for i, aInfo in pairs(self.connectingPlayers or{}) do
-		if (System.GetEntity(i)) then
+	for i, aInfo in pairs(BotAPI.CONNECTING_PLAYERS) do
+		local hPlayer = System.GetEntity(i)
+		if (hPlayer) then
 			if (g_localActor) then
 				if (aInfo.entity.id == g_localActor.id) then
-					_reload = false;
-					self.connectingPlayers[i] = nil;
+					BotAPI.CONNECTING_PLAYERS[i] = nil
 				elseif (Bot) then
 					self:SafeCall(Bot.OnPlayerConnected, Bot, aInfo.entity, aInfo.channelId)
-					self.connectingPlayers[i] = nil;
+					BotAPI.CONNECTING_PLAYERS[i] = nil
 				end
 			end
 		else
@@ -140,7 +213,7 @@ end
 -------------------
 -- OnRevive
 
-BotAPI.OnRevive = function(self, channelId, player, isBot) -- when received phys profile "alive" from server
+BotAPI.Events.OnRevive = function(self, channelId, player, isBot) -- when received phys profile "alive" from server
 
 	-----------
 	if (Bot and Bot.OnRevive) then
@@ -151,7 +224,7 @@ end
 -------------------
 -- OnJump
 
-BotAPI.OnJump = function(self, channelId, player, isBot)
+BotAPI.Events.OnJump = function(self, channelId, player, isBot)
 
 	-----------
 	if (Bot and Bot.OnPlayerJump) then
@@ -162,7 +235,7 @@ end
 -------------------
 -- OnShoot
 
-BotAPI.OnShoot = function(self, weapon, player, pos, dir)
+BotAPI.Events.OnShoot = function(self, weapon, player, pos, dir)
 	
 	-----------
 	if (Bot and Bot.OnShoot) then
@@ -173,7 +246,7 @@ end
 -------------------
 -- OnPlayerInit
 
-BotAPI.OnPlayerInit = function(self, channelId, player, isBot) -- gameRules + g_localActor available
+BotAPI.Events.OnPlayerInit = function(self, channelId, player, isBot) -- gameRules + g_localActor available
 
 	-----------
 	if (not player) then
@@ -181,7 +254,7 @@ BotAPI.OnPlayerInit = function(self, channelId, player, isBot) -- gameRules + g_
 
 	-----------
 	if (isBot) then
-		FinchPower:OnPreConnect()
+		BotMain:OnPreConnect()
 		
 	elseif (Bot and Bot.OnPlayerConnected) then
 		self:SafeCall(Bot.OnPlayerConnected, Bot, player, channelId)
@@ -191,7 +264,7 @@ end
 -------------------
 -- OnHit
 
-BotAPI.OnHit = function(self, hit)
+BotAPI.Events.OnHit = function(self, hit)
 
 	-----------
 	if (Bot and Bot.PreOnHit) then
@@ -199,9 +272,19 @@ BotAPI.OnHit = function(self, hit)
 end
 
 -------------------
+-- OnHit
+
+BotAPI.Events.OnHit = function(self)
+
+	-----------
+	if (Bot and Bot.OnNetworkLag) then
+		Bot:OnNetworkLag() end
+end
+
+-------------------
 -- OnExplosion
 
-BotAPI.OnExplosion = function(self, explosion) -- Explosions near the bot
+BotAPI.Events.OnExplosion = function(self, explosion) -- Explosions near the bot
 
 	-----------
 	if (Bot and Bot.PreOnExplosion) then
@@ -211,7 +294,7 @@ end
 -------------------
 -- OnConnect
 
-BotAPI.OnConnect = function(self, channelId, player)
+BotAPI.Events.OnConnect = function(self, channelId, player)
 
 	-----------
 	self.connectingPlayers[player.id] = {
@@ -223,13 +306,13 @@ end
 -------------------
 -- OnBotConnect
 
-BotAPI.OnBotConnect = function(self, channelId, player)
+BotAPI.Events.OnBotConnect = function(self, channelId, player)
 end
 
 -------------------
 -- OnPlayerDisconnect
 
-BotAPI.OnPlayerDisconnect = function(self, channelId, player)
+BotAPI.Events.OnPlayerDisconnect = function(self, channelId, player)
 
 	-----------
 	if (Bot and Bot.OnDisconnect) then
@@ -239,32 +322,30 @@ end
 -------------------
 -- OnBotDisconnect
 
-BotAPI.OnBotDisconnect = function(self, player, reason)
+BotAPI.Events.OnBotDisconnect = function(self, sReason, sInfo)
 
 	-----------
-	FinchPower:OnDisconnect()
-		
-	-----------
 	if (Bot and Bot.OnBotDisconnect) then
-		self:SafeCall(Bot.OnBotDisconnect, Bot, player, channelId) end
-		
+		self:SafeCall(Bot.OnBotDisconnect, Bot, g_localActor) end
+
 	-----------
-	FinchPower:UninstallBot(reason)
+	BotMain:OnDisconnect()
+	BotMain:UninstallBot(sReason, sInfo)
 end
 
 -------------------
 -- OnBotConnectFailed
 
-BotAPI.OnBotConnectFailed = function(self, reason, info)
+BotAPI.Events.OnBotConnectFailed = function(self, sReason, sInfo)
 
 	-----------
-	FinchPower:UninstallBot(info)
+	--BotMain:UninstallBot(checkString(sReason,"<N/A>"))
 end
 
 -------------------
 -- OnTaggedEntity
 
-BotAPI.OnTaggedEntity = function(self, entityId)
+BotAPI.Events.OnTaggedEntity = function(self, entityId)
 	
 	-----------
 	if (Bot and Bot.OnTaggedEntity) then
@@ -274,7 +355,7 @@ end
 -------------------
 -- OnRadioMessage
 
-BotAPI.OnRadioMessage = function(self, hSender, iMessage)
+BotAPI.Events.OnRadioMessage = function(self, hSender, iMessage)
 	
 	-----------
 	if (Bot and Bot.OnRadioMessage) then
@@ -284,7 +365,7 @@ end
 -------------------
 -- GetFunctionName
 
-BotAPI.GetFunctionName = function(self, f)
+BotAPI.Events.GetFunctionName = function(self, f)
 
 	-----------
 	if (f:find("%.") or f:find(":")) then
@@ -302,7 +383,7 @@ end
 -------------------
 -- SafeCall
 
-BotAPI.SafeCall = function(self, fFunc, ...)
+BotAPI.Events.SafeCall = function(self, fFunc, ...)
 
 	-----------
 	if (not isNull(fFunc)) then
@@ -310,7 +391,7 @@ BotAPI.SafeCall = function(self, fFunc, ...)
 		local bOk, hRes = pcall(fFunc, ...)
 		if (not bOk) then
 			SetError("SafeCall failed to execute function " .. tostring(functionName), (hRes or "<No Error Info>"))
-			return FinchPower:FinchError(false)
+			return BotMain:FinchError(false)
 		end
 		
 		-----------
@@ -318,7 +399,7 @@ BotAPI.SafeCall = function(self, fFunc, ...)
 			bOk, hRes = pcall(hRes)
 			if (not bOk) then
 				SetError("SafeCall failed to load function " .. tostring(functionName), (hRes or "<No Error Info>"))
-				return FinchPower:FinchError(false)
+				return BotMain:FinchError(false)
 			end
 		end
 	else

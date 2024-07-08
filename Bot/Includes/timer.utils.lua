@@ -13,6 +13,22 @@ timer = {
 }
 
 ---------------------------
+-- luautils.new
+
+timer.new = function()
+	
+	-----------
+	local n = {}
+	n.timer = timer.init()
+	n.expired = function(i)
+		return (timer.expired(n.timer, i))
+	end
+
+	-----------
+	return n
+end
+
+---------------------------
 -- luautils.init
 
 timer.init = function()
@@ -95,6 +111,7 @@ end
 
 
 -------------------
+timernew = timer.new
 timerinit = timer.init
 timerdestroy = timer.destroy
 timerdiff = timer.diff

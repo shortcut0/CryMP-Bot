@@ -159,4 +159,62 @@ iniutils.iniwrite = function(sFile, sSection, sKey, sVal) -- WIP !!
 end
 
 ------------------
+iniutils.iniwritearray = function(sFile, aData, bEraseFileData) -- WIP !!
+
+	-- check parameters
+	if (sFile == nil) then
+		return false end
+	
+	-------------------------
+	local aIniData = {}
+	
+	-------------------------
+	local hFile
+	if (iniutils.file_exists(sFile)) then
+		hFile = io.open(sFile, "r")
+		iniutils._readToArray(hFile, aIniData)
+	end
+		
+	-------------------------
+	if (bEraseFileData == true) then
+		aIniData = {}
+	end
+		
+	-------------------------
+	for sSection, aSection in pairs(aData) do
+		if (isArray(aSection)) then
+			for sKey, hVal in pairs(aSection) do
+				if (aIniData[tostring(sSection)] == nil) then
+					aIniData[tostring(sSection)] = {}
+				end
+				
+				aIniData[tostring(sSection)][tostring(sKey)] = hVal
+			end
+		end
+	end
+	
+	if (hFile) then
+		hFile:close() end
+		
+	hFile = io.open(sFile, "w+")
+	iniutils._writeFromArray(hFile, aIniData)
+	hFile:close()
+	
+	return true
+end
+
+------------------
+iniutils.iniwritearrayex = function(sFile, aData) -- WIP !!
+
+	-- check parameters
+	return iniutils.iniwritearray(sFile, aData, true)
+end
+
+------------------
+iniRead = iniutils.iniread
+iniWrite = iniutils.iniwrite
+iniWriteArray = iniutils.iniwritearray
+iniWriteArrayEx = iniutils.iniwritearrayex
+
+------------------
 return iniutils

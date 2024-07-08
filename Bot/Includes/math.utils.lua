@@ -13,6 +13,9 @@ mathutils = {
 }
 
 ---------------------------
+math.INF = (1 / 0)
+
+---------------------------
 -- math.t
 
 math.t = tonumber;
@@ -22,6 +25,16 @@ math.t = tonumber;
 
 math.isnumber = function(i)
 	return type(i) == "number"
+end
+
+---------------------------
+-- math.fix
+
+math.fix = function(i)
+	if (i == math.INF or (i == 1 / 0) or tostring(i) == "inf") then
+		i = 0
+	end
+	return i
 end
 
 ---------------------------
@@ -114,12 +127,57 @@ math.decrease = function(hVar, iRem)
 	return (checkNumber(hVar, 0) - checkNumber(iRem, 0))
 end
 
+---------------------------
+-- math.maxex
+
+math.maxex = function(iNum, iMax)
+	if (iNum > iMax) then
+		return iMax
+	end
+	return iNum
+end
+
+---------------------------
+-- math.minex
+
+math.minex = function(iNum, iMin)
+	if (iNum < iMin) then
+		return iMin
+	end
+	return iNum
+end
+
+---------------------------
+-- math.limit
+
+math.limit = function(iNum, iMin, iMax)
+	local iNew = iNum
+	if (isNumber(iMin)) then
+		iNew = math.minex(iNew, iMin)
+	end
+	if (isNumber(iMax)) then
+		iNew = math.maxex(iNew, iMax)
+	end
+	return iNew
+end
+
+---------------------------
+-- math.frandom
+
+math.frandom = function(min, max)
+	return min + math.random() * (max - min)
+end
+
 -------------------
 mathutils.t = math.t
 mathutils.div = math.div
 mathutils.fits = math.fits
 mathutils.calctime = math.calctime
 mathutils.isnumber = math.isnumber
+mathutils.maxex = math.maxex
+mathutils.minex = math.minex
+mathutils.limit = math.limit
+mathutils.frandom = math.frandom
 
 -------------------
 return mathutils

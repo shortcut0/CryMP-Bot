@@ -19,19 +19,22 @@ Config = {
 	CurrentServer = "116.203.92.129:50002"; -- tox PS
 	CurrentServer = "116.203.92.129:64087"; -- something
 	CurrentServer = "94.16.110.182:64005"; -- alien
-	CurrentServer = "116.203.92.129:50001"; -- tox IA
-	CurrentServer = "127.0.0.1:66666:2020"; -- local
 	CurrentServer = "5.9.20.51:64089"; -- gercry IA
 	CurrentServer = "178.190.213.69:64087"; -- sox elite
 	CurrentServer = "116.203.92.129:64088"; -- something_pro
-	CurrentServer = "116.203.92.129:55001"; -- atom 
-	
+	CurrentServer = "137.186.81.229:64087"; -- something
+	CurrentServer = "116.203.92.129:55001"; -- atom
+	CurrentServer = "185.22.237.253:11502"; -- something_pro
+	CurrentServer = "127.0.0.1:66666 2020"; -- local
+	CurrentServer = "185.22.237.253:11512"; -- tox ia (new)
+	CurrentServer = "127.0.0.1:66666:2020"; -- local
+
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers
 	AutoConnect = true;
 	
 	-- if true, game will be quit if disconnected from server for Xth times
-	ZombieQuit = true;
+	ZombieQuit = false;
 	
 	-- how often you can get disconnected until Zombie Quit
 	ZombieDisconnects = 300;
@@ -289,7 +292,7 @@ Config = {
 	
 	----------------------------------------------
 	-- if true, error box will appear on script error
-	UseErrorBox = false;
+	UseErrorBox = true;
 	
 	-- Quit Bot if Hard Script Error occurs (e.g. Error on Init)
 	QuitOnHardError = false;

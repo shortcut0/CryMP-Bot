@@ -152,7 +152,6 @@ BotAI:CreateAIModule("PowerStruggle", {
 		-- OnEntityTagged
 		OnEntityTagged = function(self, hEntity)
 			self:AILog(0, "%s.Events.OnEntityTagged(%s)", self.ModuleFullName, hEntity:GetName())
-			
 			self:SendRadio(RADIO_ENEMY_SPOTTED)
 			return true
 		end,
@@ -603,7 +602,13 @@ BotAI:CreateAIModule("PowerStruggle", {
 		if (hTarget) then
 			if (hTarget == 0xBEEF) then
 				self:AILog(0, "Got 0xBEEF as attention target!")
-				return end
+				if (Bot:OkToProne()) then
+					Bot:StartProne()
+				else
+					Bot:StopProne()
+				end
+				return
+			end
 			self.CURRENT_ATTENTION_TARGET = hTarget
 		else
 			self.CURRENT_ATTENTION_TARGET = nil
@@ -873,7 +878,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		self:AILog(0, "Medium: %d, utility: %d", (iMedium + iHeavy), iUtility)
 			
 		-----------
-		local hCurrent = Bot:GetCurrentItem()
+		local hCurrent = Bot:GetItem()
 		if (hCurrent and hCurrent.weapon) then
 			local iInventory = Bot:GetInventoryAmmo(hCurrent)
 			local iClip = hCurrent.weapon:GetClipSize()
@@ -918,7 +923,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			local sClass = aProps.class
 			if (sClass and not self:BuyError(aProps.id)) then
 				if (not Bot:HasItem(sClass) and Bot:SpaceInInventory(sClass)) then
-					if (aProps.price and aProps.price <= iPrestige and not _BLACKLISTED[sClass] and (aBuyable[sClass] == true and aExcluded[sClass] ~= true)) then
+					if (aProps.price and aProps.price <= iPrestige and (aBuyable[sClass] == true and aExcluded[sClass] ~= true)) then
 						if (timerexpired(self.LAST_ITEM_BOUGHT_TIMER, 1) or (sClass ~= self.LAST_BOUGHT_ITEM)) then
 							table.insert(aConsideredItems, { aProps.class, aProps.price, aProps.id }) end
 					end
@@ -1002,7 +1007,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			local sClass = aProps.class
 			if (sClass and not self:BuyError(aProps.id)) then
 				if (not Bot:HasItem(sClass)) then
-					if (aProps.price and aProps.price <= iPrestige and not _BLACKLISTED[sClass] and (aBuyableKits[sClass] == true and aExcluded[sClass] ~= true)) then
+					if (aProps.price and aProps.price <= iPrestige  and (aBuyableKits[sClass] == true and aExcluded[sClass] ~= true)) then
 						if (timerexpired(self.LAST_KIT_BOUGHT_TIMER, 1) or (sClass ~= self.LAST_BOUGHT_ITEM)) then
 							table.insert(aConsideredKits, { aProps.class, aProps.price, aProps.id }) end
 					end
@@ -1087,7 +1092,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			local sClass = aProps.class
 			if (sClass and not self:BuyError(aProps.id)) then
 				if (not Bot:HasItem(sClass)) then
-					if (aProps.price and aProps.price <= iPrestige and not _BLACKLISTED[sClass] and (aBuyableExplosives[sClass] == true and aExcluded[sClass] ~= true)) then
+					if (aProps.price and aProps.price <= iPrestige  and (aBuyableExplosives[sClass] == true and aExcluded[sClass] ~= true)) then
 						if (timerexpired(self.LAST_EXPLOSIVE_BOUGHT_TIMER, 1) or (sClass ~= self.LAST_BOUGHT_ITEM)) then
 							table.insert(aConsideredExplosives, { aProps.class, aProps.price, aProps.id }) end
 					end

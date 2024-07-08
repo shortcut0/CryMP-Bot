@@ -10,7 +10,7 @@ AILog = function(msg, ...)
 	if (...) then
 		sFmt = string.format(sFmt, ...) end
 		
-	System.LogAlways(sFmt)
+	SystemLog(sFmt)
 end
 
 -------------------
@@ -19,7 +19,7 @@ AILogError = function(msg, ...)
 	if (...) then
 		sFmt = string.format(sFmt, ...) end
 		
-	System.LogAlways(sFmt)
+	SystemLog(sFmt)
 end
 
 -------------------
@@ -28,7 +28,7 @@ AILogWarning = function(msg, ...)
 	if (...) then
 		sFmt = string.format(sFmt, ...) end
 		
-	System.LogAlways(sFmt)
+	SystemLog(sFmt)
 end
 
 -------------------
@@ -155,7 +155,7 @@ BotAI.LoadAIModules = function()
 	AILog("Loading AI Modules")
 
 	---------------------
-	local sModulePath = "Bot\\Core\\AI\\Modules\\"
+	local sModulePath = CRYMP_BOT_ROOT .. "\\Core\\AI\\Modules\\"
 	
 	---------------------
 	local aModuleFiles = System.ScanDirectory("..\\" .. sModulePath, SCANDIR_FILES)
@@ -172,20 +172,71 @@ BotAI.LoadAIModules = function()
 		CURRENT_MODULE_PATH = sPath
 		
 		---------
-		local bOk, hModule = FinchPower:LoadFile(sPath)
+		local bOk, hModule = BotMain:LoadFile(sPath)
 		if (not bOk) then
 			AILog("Failed to Load AI Module '%s' (%s)", sPath, (hModule or "<No error info>"))
 		else
 			iLoadedFiles = iLoadedFiles + 1
 		end
 	end
-	
+
+	---------------------
+	BOT_ENTITY_DATA = nil
+	BotAI:LoadEntityData()
+
+	---------------------
+	if (isArray(BOT_ENTITY_DATA)) then
+		local sRules, sMapName = string.match(Bot:GetLevelName(), "Multiplayer/(.*)/(.*)")
+		BotMainLog(Bot:GetLevelName())
+		local aData = BOT_ENTITY_DATA[g_gameRules.class]
+		if (isArray(aData)) then
+			local aEntities = aData[sMapName]
+			if (isArray(aEntities)) then
+				AILog("Found Entity Data for Map %s", sMapName)
+				local iPatched = 0
+				for sName, vPos in pairs(aEntities) do
+					local hEntity = System.GetEntityByName(sName)
+					if (hEntity) then
+						hEntity.GetPos = function()
+							return vPos
+						end
+					end
+				end
+			end
+		end
+	end
+
 	---------------------
 	AILog("Loaded %d AI Modules", iLoadedFiles)
 	
 	---------------------
 	return true
 	
+end
+
+
+-------------------
+-- LoadAIModule
+
+BotAI.LoadEntityData = function()
+
+	---------------------
+	AILog("Loading AI Entity Data")
+
+	---------------------
+	local sDataPath = CRYMP_BOT_ROOT .. "\\Core\\AI\\EntityData.lua"
+
+	---------------------
+	local bOk, hModule = BotMain:LoadFile(sDataPath)
+	if (not bOk) then
+		AILog("Failed to Entity Data File '%s' (%s)", sDataPath, (hModule or "<No error info>"))
+	else
+		AILog("Loaded AI Entity Data")
+	end
+
+	---------------------
+	return true
+
 end
 
 
@@ -291,7 +342,7 @@ BotAI.CallEvent = function(sEventName, ...)
 
 	---------------------
 	if (not self.CURRENT_MODULE) then
-		AILogError("No AI Module loaded")
+		--AILogError("No AI Module loaded (Event Called was %s)", sEventName)
 		return (0xDEAD) end
 	
 	---------------------
