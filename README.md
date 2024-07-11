@@ -5,7 +5,7 @@ hi,
 this repo contains the lua and au3 sources for some bot i made for online matches for the first person shooter game 'Crysis'
 
 ---------------------------
-INSTALL:
+$${\color{orange}INSTALL:}$$
   - Download CryMP-Client Bot Executable (https://nomad.nullptr.one/~finch/CryMP-Bot64.exe)
   - Download this repository and extract it to "[CRYSIS_DIRECTORY]\CryMP-Bot"
   - Place the Bot Executable inside Bin64 folder or create a shortcut and append "-dir PATH_TO_YOUR_CRYSIS_FOLDER" to the command line
@@ -13,11 +13,11 @@ INSTALL:
     
 ---------------------------
 
-TODO:
+$${\color{red}TODO:}$$
   + Nothing? Fix Bugs??
-  
+
 ---------------------------
-DONE:
+$${\color{green}DONE:}$$
   * [13.07.2022] Create the repo
   * [13.07.2022] Upload Includes and Core File
   * [16.07.2022] Upload New Includes and Pathfinding System
@@ -57,4 +57,4 @@ DONE:
     * Much more but i dont recall it
   
 ---------------------------
--shortcut0 <3
+$${\color{pink}-shortcut0 <3}$$
