@@ -39,7 +39,7 @@ DONE:
     * Moved all API callbacks to BotAPI.lua
     * Moved CVar registration system & functions to CVars.lua
     * Made a temporary fix for badly placed entities that cause the bot to not to go to the correct places in some PS maps.
-      These entities must be manually entered (by their spawn-name) in EntityData.lua alongside the actual & appropriate position
+      - These entities must be manually entered (by their spawn-name) in EntityData.lua alongside the actual & appropriate position
     * Minor changes to BotAI
     * Minor changes to Bot PowerStruggle AI Module
     * Config.lua is now actually being used again, although, some options there are not yet implemented again.
@@ -50,10 +50,10 @@ DONE:
     * Fixed & Improved error handling and messages
     * Got rid of the cursed Commandline and VBS script calls!!
     * General improments of the AI
-      The bot now walljumps when it's appropriate or saves time when travelling to a point of interest
-      Better item handling and valuing. Ammo, nearby ammo, and weapons and the target now place a role when selecting the optimal weapon
-      Bot is less likely to get stuck or go for swims.
-      The Bot no longer runs around aimlessly hoping to find targets, but instead uses a state-of-the-art X-Ray Wallhack system to locate unsuspecting victims!
+      - The bot now walljumps when it's appropriate or saves time when travelling to a point of interest
+      - Better item handling and valuing. Ammo, nearby ammo, and weapons and the target now place a role when selecting the optimal weapon
+      - Bot is less likely to get stuck or go for swims.
+      - The Bot no longer runs around aimlessly hoping to find targets, but instead uses a state-of-the-art X-Ray Wallhack system to locate unsuspecting victims!
     * Much more but i dont recall it
   
 ---------------------------
