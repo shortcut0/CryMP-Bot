@@ -39,3 +39,12 @@
 .idea/sonarlint/issuestore/2/6/2644cb5fc436cf945f1430efcf670107842da70f
 .idea/modules.xml
 .idea/misc.xml
+CryMP-Bot.iml
+CryMP-Bot.log
+CryMP-BOT64.exe
+CryMP-BOT64.exe - Shortcut.lnk
+*.log
+.idea/vcs.xml
+Bot/Core/Pathfinding/NavigationData/Maps/IA/Outpost/Data-Old.lua
+Core/Pathfinding/NavigationData/Maps/IA/SteelMill/data - Copy (2).lua
+Core/Pathfinding/NavigationData/Maps/IA/SteelMill/data - Copy.lua

@@ -23,9 +23,15 @@ end
 Pathfinding = {
 	version = "0.0",
 	author = "shortcut0",
-	description = "pathfinding utilities for the bot"
+	description = "pathfinding utilities for the bot",
+
+	----------------
+	RECORDED_NAVMESH = checkGlobal("Pathfinding.RECORDED_NAVMESH")
 }
 
+
+-------------------
+Pathfinding.FAILED_CACHE = {}
 
 -------------------
 Pathfinding.VALIDATED_NAVMESH = {}
@@ -46,7 +52,7 @@ Pathfinding.RECORD_SKIP_FLYING = true
 
 -------------------
 
-BOT_NAVMESH = nil
+BOT_NAVMESH = checkGlobal(BOT_NAVMESH, {})
 FORCED_LINKS = {}
 BAKED_LINKS = {}
 
@@ -1218,9 +1224,15 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 
 	-----------------
 	if (not vClosest) then
-		return nil end
-
-	local aClosest = self.VALIDATED_NAVMESH[iClosest]
+		return nil
+	else
+		local iDistance = vector.distance(vSource, vClosest)
+		if (iDistance > 50 or (iDistance > 20 and not Bot:IsVisible_Points(vSource, vClosest))) then
+			self:OnFail(vSource, vTarget)
+			self.PATHGEN_FAILED = true
+			return nil
+		end
+	end
 
 	-----------------
 	local vGoal, iGoal = self:GetClosestVisiblePoint(vTarget)
@@ -1231,23 +1243,50 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 	if (not vGoal) then
 		return nil end
 
-	local aGoal = self.VALIDATED_NAVMESH[iGoal]
 
 	-----------------
-	local iStartTime = os.clock()
+	local hStart = timernew()
+	local aGoal = self.VALIDATED_NAVMESH[iGoal]
+	local aClosest = self.VALIDATED_NAVMESH[iClosest]
+
+	-----------------
+	if (not (
+		self:IsTargetAvailable(vClosest, vTarget) or
+		self:IsTargetAvailable(vTarget, vClosest) or
+		self:IsTargetAvailable(vTarget, vSource) or
+		self:IsTargetAvailable(vSource, vTarget)
+	)) then
+		return PathFindLog("[$4Error$9] Targets not connected to each other !!")
+	end
 
 	-----------------
 	aPath = astar.path(aClosest, aGoal, self.VALIDATED_NAVMESH, true, function(node, neighbor)
-		return node.links[neighbor.id] == true
+		return (node.links[neighbor.id] == true)
 	end)
 
 	----------------
-	PathFindLog("Generated path with %d Nodes in %0.4fs", table.count(aPath), (os.clock() - iStartTime))
+	PathFindLog("Generated path with %d Nodes in %0.4fs", table.count(aPath), hStart.diff())
 
 	----------------
 	if (not isArray(aPath) or table.count(aPath) < 1) then
 		self.PATHGEN_FAILED = true
+		self:OnFail(vClosest, aGoal)
 		return {} end
+
+	----------------
+	local vLast = table.last(aPath)
+	PathFindLog("-> %f", vector.distance(vGoal, vTarget))
+
+	if (vector.distance(vGoal, vTarget) > 60 or (vector.distance(vGoal, vTarget) > 20 and not Bot:IsVisible_Points(vLast, aGoal))) then
+		self:OnFail(vClosest, vTarget)
+	end
+
+	-- !!FIXME
+	--local vFirst = table.last(aPath, function(x, y) return (y >= 2)  end)
+	--PathFindLog("-> %f", vector.distance(vFirst, vClosest) )
+	--if (vector.distance(vFirst, vClosest) > 20 and not Bot:IsVisible_Points(vFirst, vClosest)) then
+	--	self:OnFail(vFirst, vClosest)
+	--end
 
 	----------------
 	table.insertFirst(aPath, vClosest)
@@ -1256,6 +1295,75 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 	----------------
 	return self.Validate(aPath)
 
+end
+
+---------------------------------------------
+-- Pathfinding.OnFail
+
+Pathfinding.OnFail = function(self, vSource, vTarget)
+	local sSource = string.format("x%dy%dz%d", vSource.x, vSource.y, vSource.z)
+	local sTarget = string.format("x%dy%dz%d", vTarget.x, vTarget.y, vTarget.z)
+
+	self.FAILED_CACHE[sSource] = checkArray(self.FAILED_CACHE[sSource])
+	self.FAILED_CACHE[sSource][sTarget] = ((self.FAILED_CACHE[sSource][sTarget] or 0) + 1)
+
+	if (not self:IsTargetAvailable(vSource, vTarget)) then
+		PathFindLog("$9[$4Error$9] Target at G(%s) is now no longer available from Source G(%s)", sTarget, sSource)
+	end
+end
+
+---------------------------------------------
+-- Pathfinding.IsTargetAvailable
+
+Pathfinding.IsTargetAvailable = function(self, vSource, vTarget)
+	local sSource = string.format("x%dy%dz%d", vSource.x, vSource.y, vSource.z)
+	local sTarget = string.format("x%dy%dz%d", vTarget.x, vTarget.y, vTarget.z)
+
+	if (not self.FAILED_CACHE[sSource]) then
+		return true
+	end
+
+	local iFails = checkNumber(self.FAILED_CACHE[sSource][sTarget], 0)
+	return (iFails < 3)
+end
+
+---------------------------------------------
+-- Pathfinding.IsTargetAvailable
+
+Pathfinding.IsEntityReachable = function(self, hEntity)
+
+	local vPos = g_localActor:GetPos()
+	local vEntity = hEntity:GetPos()
+
+	local vClosest, iClosest = self:GetClosestPoint(vPos, nil, self.NODE_MAX_DIST)
+	if (not vClosest) then
+		return false
+	end
+
+	-----------------
+	-- Super laggy
+	--[[
+	local vGoal, iGoal = self:GetClosestVisiblePoint(vEntity)
+	if (not vGoal) then
+		vGoal, iGoal = self:GetClosestPoint(vEntity) end
+
+	-----------------
+	if (not vGoal) then
+		return false end
+	--]]
+
+	-----------------
+	if (not (
+			self:IsTargetAvailable(vClosest, vEntity) or
+					self:IsTargetAvailable(vEntity, vClosest) or
+					self:IsTargetAvailable(vEntity, vPos) or
+					self:IsTargetAvailable(vPos, vEntity)
+	)) then
+		return false
+	end
+
+	PathFindLog("ITS OK")
+	return true
 end
 
 ---------------------------------------------
@@ -2209,10 +2317,18 @@ Pathfinding.ExportNavmesh = function(self, aNodes)
 	---------------------
 	local sMapName, sMapRules = self.GetMapName()
 	local sDir = CRYMP_BOT_ROOT .. "\\Core\\Pathfinding\\NavigationData\\Maps"
-	os.execute(string.format("if not exist \"%s\" md \"%s\"", sDir, sDir))
+
+	-- !! FIXME (Delete this shiiiiiiiiaaatthhh)
+	os.execute(string.format("@MD \"%s/%s\"", sDir, sMapRules))
 
 	local sFileName = string.format("%s\\%s\\%s\\Data.lua", sDir, sMapRules, sMapName)
-	local hFile = io.open(sFileName, "w+") --string.openfile(sFileName, "w+")
+	local hFile, sError = io.open(sFileName, "w+") --string.openfile(sFileName, "w+")
+	if (not isFile(hFile)) then
+		PathFindLog("Failed to open file for writing (%s)", checkString(sError, string.UNKNOWN))
+		PathFindLog("\tFile was %s (%s\\%s)", sFileName, sDir, sMapRules)
+		return
+	end
+
 	self:WriteToFile(hFile, "-------------------\n")
 	self:WriteToFile(hFile, "--Bot-AutoGenerated\n")
 	self:WriteToFile(hFile, "\n")

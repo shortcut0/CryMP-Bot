@@ -369,12 +369,18 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local aBestSpawn = { nil, -1 }
 		for i, hSpawn in pairs(aSpawnGroups) do
 			if (self:CompareTeams(hSpawn, g_localActor)) then
-				local iDistance = vector.distance(hSpawn:GetPos(), vPos)
-				if (aBestSpawn[2] == -1 or (iDistance < aBestSpawn[2])) then
-					aBestSpawn = {
-						hSpawn,
-						iDistance
-					}
+
+				-- inappropriate place
+				if (true or Pathfinding:IsEntityReachable(hSpawn)) then
+					local iDistance = vector.distance(hSpawn:GetPos(), vPos)
+					if (aBestSpawn[2] == -1 or (iDistance < aBestSpawn[2])) then
+						aBestSpawn = {
+							hSpawn,
+							iDistance
+						}
+					end
+				else
+					PathFindLog("Its not ok !!!")
 				end
 			end
 		end
@@ -596,6 +602,8 @@ BotAI:CreateAIModule("PowerStruggle", {
 	
 	-----------------
 	GetAttentionPoint = function(self)
+
+		Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_None
 		self:AILog(0, "%s.GetAttentionPoint()", self.ModuleFullName)
 		
 		local hTarget = self:PostGetAttentionPoint()
@@ -607,6 +615,9 @@ BotAI:CreateAIModule("PowerStruggle", {
 				else
 					Bot:StopProne()
 				end
+
+				Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_Beef
+				Bot:StopMovement()
 				return
 			end
 			self.CURRENT_ATTENTION_TARGET = hTarget
@@ -614,7 +625,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			self.CURRENT_ATTENTION_TARGET = nil
 			
 			-- Experimental (refresh everything now and then)
-			BotNavigation:ResetPathData()
+			 BotNavigation:ResetPathData() -- Causes massive lag spikes !! oww
 			-- ~...
 		end
 		
@@ -654,8 +665,10 @@ BotAI:CreateAIModule("PowerStruggle", {
 			self:AILog(0, "checking attention target (In Radius: %s, Correct Team: %s)", string.bool(self:IsInCaptureRadius(self.CURRENT_ATTENTION_TARGET), "yes", "no"), string.bool(not self:CompareTeams(self.CURRENT_ATTENTION_TARGET, g_localActor), "yes", "no"))
 			if (self:IsInCaptureRadius(self.CURRENT_ATTENTION_TARGET) and not self:CompareTeams(self.CURRENT_ATTENTION_TARGET, g_localActor)) then
 				self:AILog(0, "Already at attention target !!")
-				return (0xBEEF) elseif (not self:CompareTeams(self.CURRENT_ATTENTION_TARGET, g_localActor)) then
-					return self.CURRENT_ATTENTION_TARGET end
+				return (0xBEEF)
+			elseif (not self:CompareTeams(self.CURRENT_ATTENTION_TARGET, g_localActor)) then
+				return self.CURRENT_ATTENTION_TARGET
+			end
 		end
 		
 		---------
@@ -668,7 +681,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local bProto, hProto = self:IsBuildingCaptured("Prototype")
 		if (not bProto) then
 			local hCloseSpawn = self:GetUncapturedBuilding("spawn", hProto:GetPos(), 100)
-			if (hCloseSpawn) then
+			if (hCloseSpawn and Pathfinding:IsEntityReachable(hCloseSpawn)) then
 				self:AILog(0, "Found uncaptured spawn near proto!")
 				return hCloseSpawn
 			end
@@ -676,11 +689,25 @@ BotAI:CreateAIModule("PowerStruggle", {
 			
 			if (not self:CompareTeams(hProto, g_localActor)) then
 				self:SendRadio(RADIO_TAKE_PROTO) end
-			return hProto
+
+			if (Pathfinding:IsEntityReachable(hProto)) then
+				return hProto
+			end
+		end
+
+		local fPred = function(hBuilding)
+
+			-- !!FIXME (im sleepy now i cant)
+			--do return true end
+
+			Bot:SpawnDebugEffect(hBuilding:GetPos(), "ttt"..tostring(hBuilding:GetPos()))
+			return Pathfinding:IsEntityReachable(hBuilding), AILog(vector.distance(hBuilding:GetPos(),g_localActor:GetPos()))
+			-- ^ always bad for everything for some ODD REASON !
+
 		end
 		
 		---------
-		local hNextSpawn = self:GetUncapturedBuilding("spawn", hProto:GetPos(), 175)
+		local hNextSpawn = self:GetUncapturedBuilding("spawn", hProto:GetPos(), 175, fPred)
 		if (hNextSpawn) then
 			self:AILog(0, "Found another uncaptured spawn near proto!")
 			-- self:SendRadio(RADIO_TAKE_SPAWN)
@@ -688,7 +715,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		end
 			
 		---------
-		local hNextContested = self:GetContestedBuilding(GET_ALL, vPos, 300)
+		local hNextContested = self:GetContestedBuilding(GET_ALL, vPos, 300, fPred)
 		if (hNextContested) then
 			local bGotoContested = true
 			if (bGotoContested) then
@@ -696,13 +723,18 @@ BotAI:CreateAIModule("PowerStruggle", {
 				return hNextContested end end
 		
 		---------
-		local hNextUncaptured = self:GetUncapturedBuilding(GET_ALL, vPos)
+		local hNextUncaptured = self:GetUncapturedBuilding(GET_ALL, vPos, nil, fPred)
 		if (hNextUncaptured) then
 			self:SendRadio(self:GetRadioForBuilding(hNextUncaptured))
 			return hNextUncaptured end
 			
 		---------
-		local hRandom = self:GetRandomBuilding(self.CURRENT_ATTENTION_TARGET)
+		local hRandom = self:GetRandomBuilding(self.CURRENT_ATTENTION_TARGET, fPred)
+		if (not hRandom) then
+			BotNavigation:SetSleepTimer(5)
+			return AILogWarning("No random accessible building was found !")
+		end
+
 		if (not self:CompareTeams(hRandom, g_localActor)) then
 			self:SendRadio(self:GetRadioForBuilding(hRandom)) end
 		return hRandom
@@ -721,7 +753,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 	end,
 	
 	-----------------
-	GetRandomBuilding = function(self, hExcept)
+	GetRandomBuilding = function(self, hExcept, fPredEx)
 		
 		---------
 		local vPos = g_localActor:GetPos()
@@ -736,7 +768,21 @@ BotAI:CreateAIModule("PowerStruggle", {
 		---------
 		local aBuildings = self:GetBuildingsOfType(GET_ALL, vPos)
 		if (table.count(aBuildings) > 0) then
-			return getrandom(aBuildings, fPred) end
+			if (not isFunc(fPredEx)) then
+				return getrandom(aBuildings, fPred)
+			else
+				local aOk = {}
+				for i, hBuilding in pairs(aBuildings) do
+					if (fPredEx(hBuilding) == true) then
+						table.insert(aOk, hBuilding)
+					end
+				end
+				if (table.empty(aOk)) then
+					return
+				end
+				return getrandom(aOk, fPred)
+			end
+		end
 			
 		---------
 		return
@@ -747,8 +793,9 @@ BotAI:CreateAIModule("PowerStruggle", {
 	
 		----------
 		if (not hEntity) then
-			return (not isNull(self.INSIDE_CAPTURE_AREA)) else
-			return (vector.distance(hEntity:GetPos(), g_localActor:GetPos()) < 15) end
+			return (not isNull(self.INSIDE_CAPTURE_AREA))
+		else
+			return (vector.distance(hEntity:GetPos(), g_localActor:GetPos()) < 5) end
 	
 		----------
 		if (isNull(self.INSIDE_CAPTURE_AREA)) then
@@ -1174,7 +1221,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 	end,
 	
 	-----------------
-	GetUncapturedBuilding = function(self, sType, vSource, iMaxDistance)
+	GetUncapturedBuilding = function(self, sType, vSource, iMaxDistance, fPred)
 		self:AILog(0, "%s.GetUncapturedBuilding()", self.ModuleFullName)
 		
 		---------
@@ -1192,7 +1239,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		for i, hBuilding in pairs(aBuildings) do
 			if (not self:CompareTeams(hBuilding, g_localActor)) then
 				local iDistance = vector.distance(vSource, hBuilding:GetPos())
-				if (iMaxDistance == -1 or (aClosest[2] == -1 or iDistance < aClosest[2])) then
+				if ((fPred == nil or fPred(hBuilding) == true) and (iMaxDistance == -1 or (aClosest[2] == -1 or iDistance < aClosest[2]))) then
 					aClosest = {
 						hBuilding,
 						iDistance
@@ -1206,7 +1253,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 	end,
 	
 	-----------------
-	GetContestedBuilding = function(self, sType, vSource, iMaxDistance)
+	GetContestedBuilding = function(self, sType, vSource, iMaxDistance, fPred)
 		self:AILog(0, "%s.GetContestedBuilding()", self.ModuleFullName)
 		
 		---------
@@ -1227,7 +1274,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 				if (sType == GET_ALL or (hBuilding.BUILDING_TYPE == sType)) then
 					if (not self:CompareTeams(hBuilding, g_localActor)) then
 						local iDistance = vector.distance(vSource, hBuilding:GetPos())
-						if (iMaxDistance == -1 or (aClosest[2] == -1 or iDistance < aClosest[2])) then
+						if ((fPred == nil or fPred(hBuilding) == true) and (iMaxDistance == -1 or (aClosest[2] == -1 or iDistance < aClosest[2]))) then
 							aClosest = {
 								hBuilding,
 								iDistance

@@ -16,16 +16,22 @@ timer = {
 -- luautils.new
 
 timer.new = function()
-	
+
 	-----------
-	local n = {}
-	n.timer = timer.init()
-	n.expired = function(i)
-		return (timer.expired(n.timer, i))
+	local timer = timer
+
+	local hNew = {}
+	hNew.timer = timer.init()
+
+	hNew.expired = function(i)
+		return (timer.expired(hNew.timer, i))
+	end
+	hNew.diff = function(i)
+		return (timer.diff(hNew.timer))
 	end
 
 	-----------
-	return n
+	return hNew
 end
 
 ---------------------------

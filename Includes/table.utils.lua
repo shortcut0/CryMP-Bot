@@ -344,6 +344,24 @@ table.one = function(t, pred)
 end
 
 ---------------------------
+-- table.first
+
+table.first = table.one
+
+---------------------------
+-- table.last
+
+table.last = function(t, pred)
+
+	local i = table.count(t)
+	local c = 0
+	for _, v in pairs(t) do
+		c = c + 1
+		if ((c >= i and pred == nil) or (isFunc(pred) and pred(v, c))) then
+			return v end end
+end
+
+---------------------------
 -- table.count
 
 table.count = function(t, pred)

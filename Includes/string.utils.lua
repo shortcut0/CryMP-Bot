@@ -1216,16 +1216,49 @@ end
 
 string.escape = function(sString, aExtra)
 
-	---------
+    ---------
+    local aMap = {
+        ['\\'] = '\\\\',   -- Backslash
+        ['.'] = '%.',       -- Dot
+        ['*'] = '%*',       -- Asterisk
+        ['?'] = '%?',       -- Question mark
+        ['('] = '%(',       -- Left parenthesis
+        [')'] = '%)',       -- Right parenthesis
+        ['['] = '%[',       -- Left square bracket
+        [']'] = '%]',       -- Right square bracket
+        ['{'] = '%{',       -- Left curly bracket
+        ['}'] = '%}',       -- Right curly bracket
+        ['^'] = '%^',       -- Caret
+        ['$'] = '%$',       -- Dollar sign
+        ['-'] = '%-',        -- Minus
+        ['+'] = '%+'        -- Minus
+        -- Add more as needed
+    }
+
+    ---------
+    if (aExtra) then
+        aMap = table.append(aMap, aExtra) end
+
+    ---------
+    local function fReplace(c)
+        return (aMap[c] or c)
+    end
+
+    ---------
+    local sEscaped = string.gsub(sString, '[\\.%*%+%-%?%(%)%[%]%^%$%%{}]', fReplace)
+    return sEscaped
+
+    ---------
+    --[[
 	if (isNull(sString)) then
 		return "" end
 
 	---------
 	local aEscapes = {
 		"(", ")",
-		"[", "]",
-		"+", "-", "*", "\\",
-		"?", "%", "$", "^", "."
+		"[", --"]",
+		"+", "-", "*", --"\\",
+		"?", "%", "$", "^", ".", --"["
 	}
 
 	---------
@@ -1235,11 +1268,13 @@ string.escape = function(sString, aExtra)
 	---------
 	local sEscaped = string.new(sString)
 	for i, sChar in pairs(aEscapes) do
+        print(("%" .. sChar))
 		sEscaped = string.gsub(sEscaped, ("%" .. sChar), ("%%%" .. sChar))
 	end
 
 	---------
 	return string.gsub(sEscaped, "(%%+)", "%%")
+    --]]
 end
 
 ---------------------------
@@ -1375,6 +1410,106 @@ string.ispopensupported = function(iBytes)
 
 	---------
 	return true
+end
+
+
+-------------------
+-- Leetspeak character mapping table
+
+string.LEET_CHARSET = {
+    -- Single characters
+    ['0'] = 'o', ['1'] = 'i', ['2'] = 'z', ['3'] = 'e', ['4'] = 'a',
+    ['5'] = 's', ['6'] = 'b', ['7'] = 't', ['8'] = 'b', ['9'] = 'g',
+    ['@'] = 'a', ['!'] = 'i', ['$'] = 's', ['+'] = 't', ['^'] = 'a',
+    ['|'] = 'l', ['('] = 'c', [')'] = 'o', ['#'] = 'h', ['%%'] = 'x',
+
+    -- Multi-character combinations
+    ['|-|'] = 'h', ['/\\'] = 'a', ['|_|'] = 'u', ['|\\|'] = 'n', ['%[]'] = 'o',
+    ['|3'] = 'b', ['|<'] = 'k', ['|>'] = 'd', ['|2'] = 'r', ['|)'] = 'd',
+    ['()'] = 'o', ['%[=]'] = 'h', ['|^'] = 'i', ['|V|'] = 'm', ['|\\/|'] = 'm',
+    ['|/\\|'] = 'm', ['|)'] = 'd', ['|\\'] = 'l', ['\\/'] = 'v', ['/'] = 'f',
+    ['\\'] = 'f', ['<'] = 'c', ['>'] = 'c', ['{'] = 'c', ['}'] = 'c',
+    ['%['] = 'c', [']'] = 'c', ['|_'] = 'l', ['|-'] = 'l',
+
+    -- Additional combinations
+    ['&'] = 'a', ['8'] = 'b', ['%['] = 'c', ['|)'] = 'd', ['3'] = 'e',
+    ['|'] = 'f', ['6'] = 'g', ['|-|'] = 'h', ['!'] = 'i', ['_'] = 'j',
+    ['/\\'] = 'a', ['|<'] = 'k', ['|_'] = 'l', ['|\\/|'] = 'm', ['|\\|'] = 'n',
+    ['()'] = 'o', ['|)'] = 'p', ['()_'] = 'q', ['|2'] = 'r', ['5'] = 's',
+    ['7'] = 't', ['|_|'] = 'u', ['\\/'] = 'v', ['\\/\\/'] = 'w', ['><'] = 'x',
+    ['`/'] = 'y', ['2'] = 'z',
+
+    -- Additional variations
+    ['4'] = 'a', ['6'] = 'b', ['c'] = 'c', ['d'] = 'd', ['3'] = 'e',
+    ['f'] = 'f', ['9'] = 'g', ['h'] = 'h', ['!'] = 'i', ['_'] = 'j',
+    ['k'] = 'k', ['l'] = 'l', ['m'] = 'm', ['n'] = 'n', ['0'] = 'o',
+    ['p'] = 'p', ['q'] = 'q', ['r'] = 'r', ['5'] = 's', ['7'] = 't',
+    ['u'] = 'u', ['v'] = 'v', ['w'] = 'w', ['x'] = 'x', ['y'] = 'y',
+    ['2'] = 'z'
+}
+
+--[[
+local function replaceUppercaseI(text)
+    local sPattern = "([^A-Z])I([^A-Z])"
+    local sReplaced = string.gsub(s, sPattern, function(sBefore, sAfter)
+        if (string.match(sBefore, "[A-Z]") or string.match(sAfter, "[A-Z]")) then
+            return (sBefore .. "I" .. sAfter)
+        else
+            return (sBefore .. "i" .. sAfter)
+        end
+    end)
+    return sReplaced
+end
+--]]
+
+-------------------
+--- Init
+--- WIP
+
+string.leetDecode = function(s)
+
+    ------------
+    local aNormalMap = string.LEET_CHARSET
+    local sDecoded = s
+
+    for sLeet, sNormal in pairs(aNormalMap) do
+        if (string.len(sLeet) > 0) then
+            sDecoded = string.gsub(sDecoded, string.escape(sLeet), sNormal)
+            print(sLeet .. "\t" .. sNormal .. "\t" .. sDecoded)
+        end
+    end
+
+    -- Replace single characters
+    --sDecoded = string.gsub(sDecoded, '.', function(c)
+    --    return (aNormalMap[c] or c)
+    --end)
+
+    return sDecoded
+end
+
+-------------------
+--- Init
+--- WIP
+
+string.leetEncode = function(s)
+
+    ------------
+    local aNormalMap = string.LEET_CHARSET
+    local sEncoded = ""
+
+    for i = 1, string.len(s) do
+        local sChar = string.sub(s, i, i)
+        local sLeetChar = aNormalMap[sChar]
+        if (sLeetChar) then
+            local iRandom = math.random(#sLeetChar)
+            local sRandomLeet = string.sub(sLeetChar, iRandom, iRandom)
+            sEncoded = (sEncoded .. sRandomLeet)
+        else
+            sEncoded = (sEncoded .. sChar)  -- Keep original character if not in map
+        end
+    end
+
+    return sEncoded
 end
 
 

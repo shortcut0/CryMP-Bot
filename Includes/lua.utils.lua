@@ -427,32 +427,97 @@ luautils.switch = function(value)
     end
 end
 
----------------------------
--- luautils.increase
+------------------------------
 
 luautils.INCREASE = nil
 luautils.INCREASE_ADD = nil
 luautils.INCREASE_MULT = nil
 luautils.INCREASE_DIV = nil
 
+---------------------------
+-- luautils.increase
+
+luautils.EndInc = function(bKeepInc)
+	luautils.INCREASE_ADD = nil
+	luautils.INCREASE_MULT = nil
+	luautils.INCREASE_DIV = nil
+	luautils.INCREASE_SUB = nil
+	if (not bKeepInc) then
+		luautils.INCREASE = nil end
+end
+
+---------------------------
+-- luautils.increase
+
+luautils.StepInc = function()
+
+	-- Add
+	if (luautils.INCREASE_ADD) then
+		luautils.INCREASE = (luautils.INCREASE + luautils.INCREASE_ADD)
+
+	-- Mult
+	elseif (luautils.INCREASE_MULT) then
+		luautils.INCREASE = (luautils.INCREASE * luautils.INCREASE_MULT)
+
+	-- Div
+	elseif (luautils.INCREASE_DIV) then
+		luautils.INCREASE = (luautils.INCREASE / luautils.INCREASE_DIV)
+
+	-- Sub
+	elseif (luautils.INCREASE_SUB) then
+		luautils.INCREASE = (luautils.INCREASE - luautils.INCREASE_SUB)
+
+	end
+end
+
+---------------------------
+-- luautils.increase
+
+luautils.SetupInc = function(i)
+
+	--------
+	if (string.match(i, "^%*")) then
+		luautils.INCREASE_MULT = string.match(i, "(%d+)")
+		print("mul " .. i)
+
+	elseif (string.matchex(i, "^\\", "^/")) then
+		luautils.INCREASE_DIV = string.match(i, "(%d+)")
+		print("div " .. i)
+
+	elseif (string.matchex(i, "^%-")) then
+		luautils.INCREASE_SUB = string.match(i, "(%d+)")
+		print("sub " .. i)
+
+	else
+		luautils.INCREASE_ADD = i
+		print("add " .. i)
+	end
+end
+
+---------------------------
+-- luautils.increase
+--
+-- Args
+--  1. Initial value (or 0)
+--  2. Next value ( can be "/10" to DIVIDE, "*10" to MULTIPLY, "+10" to INCREMENT, or "-10" to DECREMENT - the Initital value )
+-- Examples:
+--  v = inc(1000, "+10") -> 1000 (No incrementing is done on the initial call)
+--  w = inc(nil, "+15")  -> 1015 (Now +15)
+--  x = inc()			 -> 1030 (+15)
+--  y = inc()			 -> 1045 (+15)
+--  z = inc("end")		 -> 1060 (+15 and stop inc())
+--  	^ OR incEnd()	 -> 1060 (+15 and stop inc())
+
 luautils.increase = function(start, add)
 
-	local add = (add or 1)
-
+	local iAdd = checkVar(add, 1)
 	local bEnd = string.matchex(start, "end")
 	if (start and not bEnd) then
-		luautils.INCREASE = start
-		luautils.INCREASE_ADD = nil
-		luautils.INCREASE_MULT = nil
-		luautils.INCREASE_DIV = nil
 
-		if (string.match(add, "^%*")) then
-			luautils.INCREASE_MULT = string.match(add, "(%d+)")
-		elseif (string.matchex(add, "^\\", "^/")) then
-			luautils.INCREASE_DIV = string.match(add, "(%d+)")
-		else
-			luautils.INCREASE_ADD = add
-		end
+		luautils.INCREASE = start
+		luautils.EndInc(true)
+		luautils.SetupInc(iAdd)
+
 
 		return start
 	end
@@ -461,20 +526,16 @@ luautils.increase = function(start, add)
 		return
 	end
 
-	if (luautils.INCREASE_ADD) then
-		luautils.INCREASE = (luautils.INCREASE + luautils.INCREASE_ADD)
-	elseif (luautils.INCREASE_MULT) then
-		luautils.INCREASE = (luautils.INCREASE * luautils.INCREASE_MULT)
-	elseif (luautils.INCREASE_DIV) then
-		luautils.INCREASE = (luautils.INCREASE / luautils.INCREASE_DIV)
+	if (add) then
+		luautils.EndInc(true)
+		luautils.SetupInc(iAdd) -- dynamic update of the steps
 	end
+
+	luautils.StepInc()
 
 	local r = luautils.INCREASE
 	if (bEnd) then
-		luautils.INCREASE = nil
-		luautils.INCREASE_ADD = nil
-		luautils.INCREASE_MULT = nil
-		luautils.INCREASE_DIV = nil
+		luautils.EndInc()
 	end
 	return r
 end
@@ -508,9 +569,12 @@ end
 -------------------
 
 inc = luautils.increase
+incEnd = function() return inc("end")  end
 unpack = (unpack or luautils.unpack)
 getrandom = luautils.random
 isNull = luautils.isNull
+isNullAny = makeAny(isNull)
+isNullAll = makeAll(isNull)
 isDead = luautils.isDead
 isArray = luautils.isArray
 isBoolean = luautils.isBoolean

@@ -176,6 +176,9 @@ Bot.BOT_FORCED_CVARS = {
 
 	BOT_AI_WALKMULT = 1.0,
 	BOT_WALKMULT = 1.0,
+
+	-- Debug
+	E_TERRAIN = 0.0,
 }
 
 Bot.FORCED_SPRINT = nil
@@ -199,6 +202,14 @@ Bot.FORCED_PATH_DELAY = nil
 
 Bot.LAST_DEBUG_EFFECT = nil
 Bot.LAST_DEBUG_EFFECTS = {}
+
+Bot.CURRENT_MOVEMENT = nil
+
+eMovInterrupt_None = inc(0, 1)
+eMovInterrupt_Beef = inc()
+eMovInterrupt_End = incEnd()
+
+Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_None
 
 ------------------------------
 --- Init
@@ -303,7 +314,7 @@ Bot.InitCommands = function(self, aList)
 	------------------------------
 	local sPrefix = "BOT_"
 	local aCommands = checkVar(aList, {
-		{ "test", 					"test_description", 	"BotLog('Function Called')" },
+		{ "test", 					"test_description", 	"BotLog('Function-Called')" },
 		{ "reload", 				"test_description", 	"Bot:Reload()" },
 		{ "enable_frame_logging", 	"test_description", 	[[Bot:EnableFrameLogging()]] },
 	})
@@ -1122,8 +1133,9 @@ Bot.OkToSprint = function(self)
 		return false
 	end
 
+	local bIndoors = self:IsIndoors()
 	if (not bSpeed) then
-		return true
+		return (not bIndoors) -- ??? WHAT IF OBSTACE ??? COME BACK TO THIS
 	end
 
 	local iEnergy = self:GetSuitEnergy()
@@ -1134,7 +1146,7 @@ Bot.OkToSprint = function(self)
 			if (self:StartedOrEndingPath(3)) then
 				return false
 			end
-			if (self:IsIndoors()) then
+			if (bIndoors) then
 				return false
 			end
 			return true
@@ -2543,7 +2555,7 @@ Bot.UpdateInventory = function(self)
 		end
 	end
 
-	BotMainLog("check inventory")
+	--BotMainLog("check inventory")
 
 	local bSelectFists = true
 	local aPriorityList = BOT_ITEM_PRIORITY
@@ -3259,7 +3271,7 @@ Bot.UpdateMovement = function(self)
 			self:SetCameraTarget(self.FORCED_CAM_LOOKAT)
 		end
 		self.BOT_STUCK_TIME = 0.0
-		BotMainLog("no move")
+		--BotMainLog("no movement data available!")
 	end
 
 	self.FORCED_CAM_LOOKAT = nil
@@ -3349,10 +3361,12 @@ Bot.StartMoving = function(self, iMode, vTarget)
 	end
 
 	self:StopMovement()
+	if (self.MOVEMENT_INTERRUPTED > eMovInterrupt_None) then
+		return BotLog("Movement interrupted (code %d)", self.MOVEMENT_INTERRUPTED)
+	end
 
 	local sKey, vGoal = aMove[1], checkVar(vTarget, aMove[2])
 	self:PressKey(sKey, -1)
-
 	self.CURRENT_MOVEMENT = {
 		sKey = sKey,
 		vGoal = vGoal,
@@ -3622,6 +3636,10 @@ end
 ------------------------------
 --- Init
 Bot.SendRadioMessage = function(self, iMessage)
+	if (isNullAny(g_localActor, iMessage)) then
+		return
+	end
+
 	g_gameRules.game:SendRadioMessage(g_localActorId, iMessage)
 end
 
