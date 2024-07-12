@@ -427,6 +427,35 @@ luautils.switch = function(value)
     end
 end
 
+---------------------------
+-- luautils.callAndExecute
+-- calls a function and executes all tasks in 'calls'
+-- Args
+--  1. f, the function to call (eg: callAndExecute(timernew), NOT callAndExecute(timernew()) UNLESS that itself returns a function)
+--  2. params, the parameters to pass to 'f'
+--  3. calls, the array containing all the tasks where index_1 is the name of the function and index_2+
+
+luautils.callAndExecute = function(f, params, calls)
+
+	local aRet = { f(unpack(params)) }
+	local hObj = aRet[1]
+
+	if (isArray(hObj)) then
+		if (table.count(calls) > 0) then
+			for i, aCall in pairs(calls) do
+				--print(table.tostring(aCall))
+				--print("call " .. tostring(aCall[1]) .. " w: " .. table.tostring({luautils.unpack(aCall, 2)}))
+				local bOk, sErr = pcall(hObj[aCall[1]], luautils.unpack(aCall, 2))
+				if (not bOk) then
+					error(sErr)
+				end
+			end
+		end
+	end
+
+	return unpack(aRet)
+end
+
 ------------------------------
 
 luautils.INCREASE = nil
@@ -567,6 +596,8 @@ local function makeAll(f)
 end
 
 -------------------
+
+callAnd = luautils.callAndExecute
 
 inc = luautils.increase
 incEnd = function() return inc("end")  end

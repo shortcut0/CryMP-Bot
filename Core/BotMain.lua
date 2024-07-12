@@ -162,6 +162,8 @@ Bot.REVIVE_TIMERS = {}
 Bot.BOT_STUCK_TIME = 0.0
 Bot.BOT_DEFAULT_STUCK_TIME = 2.5
 Bot.BOT_INDOORS_TIME = 2.5
+Bot.BOT_SUBTERRAIN_TIME = 0.0
+
 Bot.BOT_FORCED_CVARS = {
 
 	BOT_SIMPLYFIED_MELEE = 1,
@@ -207,9 +209,13 @@ Bot.CURRENT_MOVEMENT = nil
 
 eMovInterrupt_None = inc(0, 1)
 eMovInterrupt_Beef = inc()
+eMovInterrupt_DoorPause = inc()
+eMovInterrupt_DangerOutside = inc()
 eMovInterrupt_End = incEnd()
 
 Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_None
+Bot.MOVEMENT_INTERRUPTED_TIMER = nil
+Bot.MOVEMENT_INTERRUPTED_EXPIRY = nil
 
 ------------------------------
 --- Init
@@ -402,6 +408,7 @@ Bot.PatchDoors = function()
 	Door.Patch = function(hDoor)
 		hDoor.Properties.Rotation.fRange = Door.Properties.Rotation.fRange
 		hDoor.Client.ClRotate = Door.Client.ClRotate
+		--BotDLL.SetPassthroughPhysics(hDoor)
 	end
 
 	----------------------------------
@@ -1134,8 +1141,17 @@ Bot.OkToSprint = function(self)
 	end
 
 	local bIndoors = self:IsIndoors()
+	if (bIndoors) then
+		-- TODO: add check if theres a roof (one thats low..)
+		if (not self:IsUnderground()) then
+			return false
+		end
+	end
+
 	if (not bSpeed) then
-		return (not bIndoors) -- ??? WHAT IF OBSTACE ??? COME BACK TO THIS
+		return true --(not bIndoors) -- ??? WHAT IF OBSTACE ??? COME BACK TO THIS
+	--elseif (bIndoors) then
+	--	return false
 	end
 
 	local iEnergy = self:GetSuitEnergy()
@@ -1185,6 +1201,17 @@ end
 --- Init
 Bot.StopSprinting = function(self)
 	self:ReleaseKey(KEY_SPRINT)
+end
+
+------------------------------
+--- Init
+Bot.OkToJump = function(self)
+	local bIndoors = self:IsIndoors()
+	if (bIndoors) then
+		return false -- EXRIMENTAL!!
+	end
+
+	return true
 end
 
 ------------------------------
@@ -1373,6 +1400,22 @@ Bot.UpdateIndoorsVar = function(self)
 	else
 		self.BOT_INDOORS_TIME = 0.0
 	end
+end
+
+------------------------------
+--- Init
+Bot.UpdateTerrainVar = function(self)
+
+	local vPos = g_localActor:GetPos()
+	local iTerrain = System.GetTerrainElevation(vPos)
+	local iUnder = ((vPos.z + 0.25) - checkNumber(iTerrain, -999999))
+	if (iUnder < 0) then
+		self.BOT_SUBTERRAIN_TIME = (self.BOT_SUBTERRAIN_TIME + self.FRAME_TIME)
+		--BotLog("sub terrain %f",iUnder)
+	else
+		self.BOT_SUBTERRAIN_TIME = 0.0
+	end
+
 end
 
 ------------------------------
@@ -1804,6 +1847,21 @@ Bot.IsIndoors = function(self, iCheck)
 		return (System.IsPointIndoors(iCheck))
 	end
 	return (self.BOT_INDOORS_TIME > checkVar(iCheck, 0))
+end
+
+------------------------------
+--- Init
+Bot.IsUnderground = function(self, iCheck, iThreshold)
+	if (vector.isvector(iCheck)) then
+
+		local vPos = iCheck
+		local iTerrain = System.GetTerrainElevation(vPos)
+		local iUnder = (vPos.z - checkNumber(iTerrain, 0))
+
+		return (iUnder < checkNumber(iThreshold, 0))
+	end
+
+	return (self.BOT_SUBTERRAIN_TIME > checkVar(iCheck, 0))
 end
 
 ------------------------------
@@ -2403,6 +2461,8 @@ Bot.UpdateItem = function(self, bForce)
 	local bDSG = (self:HasItem(WEAPON_DSG) and self:AmmoOk(WEAPON_DSG))
 	local bGauss = (self:HasItem(WEAPON_GAUSS) and self:AmmoOk(WEAPON_GAUSS))
 	local bShotgun = (self:HasItem(WEAPON_SHOTGUN) and self:AmmoOk(WEAPON_SHOTGUN))
+	local bFY71 = (self:HasItem(WEAPON_FY71) and self:AmmoOk(WEAPON_FY71))
+	local bSCAR = (self:HasItem(WEAPON_SCAR) and self:AmmoOk(WEAPON_SCAR))
 
 	local bSeekBetter = true
 	local hCurrent = (self.CURRENT_ITEM)
@@ -2415,6 +2475,8 @@ Bot.UpdateItem = function(self, bForce)
 		BotMainLog("using shotgun!! %f",iDistance)
 	elseif (iDistance > 75 and (bDSG or bGauss)) then
 		self:SetItem((bGauss and WEAPON_GAUSS or WEAPON_DSG))
+	elseif (iDistance > 15 and (bFY71 or bSCAR)) then
+		self:SetItem((bFY71 and WEAPON_FY71 or WEAPON_SCAR))
 	elseif (bSeekBetter) then
 
 		local hWeapon
@@ -2466,6 +2528,13 @@ Bot.UpdateItem = function(self, bForce)
 		elseif (bShotgun and iDistance < 50) then
 			self:SetItem(WEAPON_SHOTGUN)
 			bSelected = true
+		elseif (bFY71) then
+			self:SetItem(WEAPON_FY71)
+			bSelected = true
+		elseif (bSCAR) then
+			self:SetItem(WEAPON_SCAR)
+			bSelected = true
+
 		end
 
 		if (not bSelected and not bAmmoOk and not bForce) then
@@ -3166,6 +3235,7 @@ Bot.UpdateMovement = function(self)
 	self:UpdateJump()
 	self:UpdateSuitMode()
 	self:UpdateIndoorsVar()
+	self:UpdateTerrainVar()
 
 	local bUpdateNavi = true
 	if (self:UpdateTargets()) then
@@ -3221,8 +3291,10 @@ Bot.UpdateMovement = function(self)
 		local bStuck = self:IsStuck(0.15)
 		local bObstacle, iPreferredSuit = self:GetJumpableObstacle()
 		if (bObstacle and bStuck) then
-			self:StartJump()
-			--self:StopJump()
+			if (self:OkToJump()) then
+				self:StartJump()
+				--self:StopJump()
+			end
 		end
 
 		local bObstacle_Crouch = (false and self:GetCrouchableObstacle())
@@ -3247,6 +3319,8 @@ Bot.UpdateMovement = function(self)
 
 				self.LAST_USED_DOOR = hDoor
 				self.LAST_USED_DOOR_STATE = hDoor.action
+
+				self:InterruptMovement(eMovInterrupt_DoorPause, 3)
 			end
 		elseif (hDoor and timerexpired(hDoor.USE_TIMER, 1)) then
 			local hLastDoor = self.LAST_USED_DOOR
@@ -3362,7 +3436,13 @@ Bot.StartMoving = function(self, iMode, vTarget)
 
 	self:StopMovement()
 	if (self.MOVEMENT_INTERRUPTED > eMovInterrupt_None) then
-		return BotLog("Movement interrupted (code %d)", self.MOVEMENT_INTERRUPTED)
+		if (self.MOVEMENT_INTERRUPTED_TIMER and self.MOVEMENT_INTERRUPTED_TIMER.expired()) then
+
+			self:ContinueMovement()
+			BotLog("Movement interruption timer has expired")
+		else
+			return BotLog("Movement interrupted (code %d)", self.MOVEMENT_INTERRUPTED)
+		end
 	end
 
 	local sKey, vGoal = aMove[1], checkVar(vTarget, aMove[2])
@@ -3372,6 +3452,32 @@ Bot.StartMoving = function(self, iMode, vTarget)
 		vGoal = vGoal,
 		iTime = _time
 	};
+end
+
+------------------------------
+--- Init
+Bot.ContinueMovement = function(self)
+	self.MOVEMENT_INTERRUPTED = nil
+	self.MOVEMENT_INTERRUPTED_TIMER = nil
+	self.MOVEMENT_INTERRUPTED_EXPIRY = nil
+end
+
+------------------------------
+--- Init
+Bot.InterruptMovement = function(self, iCase, iExpiry)
+
+	if (self.MOVEMENT_INTERRUPTED == iCase) then
+		if (not iExpiry or iExpiry == self.MOVEMENT_INTERRUPTED_EXPIRY) then
+			return
+		end
+	end
+
+	self.MOVEMENT_INTERRUPTED = iCase
+
+	if (iExpiry) then
+		self.MOVEMENT_INTERRUPTED_TIMER = callAnd(timernew, {}, { { 'setexpiry', iExpiry } })
+		self.MOVEMENT_INTERRUPTED_EXPIRY = iExpiry
+	end
 end
 
 ------------------------------

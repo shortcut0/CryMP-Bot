@@ -255,7 +255,7 @@ BotNavigation.Update = function(self)
 		if (self:IsNodeUnreachable(hCurrentNode)) then
 
 			Bot:StopMovement()
-			self:Log(3, "Current node is unreachable!")
+			self:Log(0, "Current node is unreachable!")
 			
 			self.CURRENT_PATH_NODE_STUCK_TIME = timerinit()
 			
@@ -265,10 +265,10 @@ BotNavigation.Update = function(self)
 					self.CURRENT_PATH_NODE = self.CURRENT_PATH_NODE - 1
 					hCurrentNode = self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_NODE]
 					self:Log(3, "REVERTING to OLDER node %d!", self.CURRENT_PATH_NODE)
-				until (not hCurrentNode or self:IsNodeVisible(hCurrentNode, true))
+				until (not hCurrentNode or  self:IsNodeVisible(hCurrentNode, true))
 					
 				if (not hCurrentNode) then
-					self:Log(3, "all reverted. no visible node found!")
+					self:Log(0, "all reverted. no visible node found!")
 					self:GetNewPath(sRandomClass)
 				end
 				bReverted = true
@@ -1249,6 +1249,9 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 		local iDistance = 0
 		local aPath = {}
 		local vGoal
+
+		Pathfinding:SetCurrentTarget(hTarget)
+
 		if (hTarget) then
 			local vPos = g_localActor:GetPos()
 			local vTarget = hTarget:GetPos()
@@ -1279,6 +1282,8 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 			
 			self:Log(0, "Path Generated in %0.4fs (tClass: %s, tId: %s), tDist: %f, iNodes: %d)", timerdiff(hTimerStart), hTarget.class, tostring(hTarget.id), iDistance, self.CURRENT_PATH_SIZE)
 			self:Log(0, "Target = %s", hTarget:GetName())
+
+			self:Log(0, tracebackEx())
 		else
 			self:Log(3, "Failed to retrive new path to class %s!!", tostring(sTargetsClass))
 			self:Log(3, "	environment count: %d/%d", self.SPAWNPOINT_ENVIRONMENT[1], self.SPAWNPOINT_ENVIRONMENT[2])

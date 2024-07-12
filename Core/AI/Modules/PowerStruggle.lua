@@ -616,12 +616,20 @@ BotAI:CreateAIModule("PowerStruggle", {
 					Bot:StopProne()
 				end
 
-				Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_Beef
+				--Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_Beef
+				if (not self:IsContested(self.CURRENT_ATTENTION_TARGET)) then
+					Bot:InterruptMovement(eMovInterrupt_Beef)
+				else
+					self:AILog("not pausing, theres contestants!!")
+				end
 				Bot:StopMovement()
 				return
 			end
+
+			self:AILog(0, "Target ok")
 			self.CURRENT_ATTENTION_TARGET = hTarget
 		else
+			self:AILog(0, "Reset all!")
 			self.CURRENT_ATTENTION_TARGET = nil
 			
 			-- Experimental (refresh everything now and then)
@@ -698,11 +706,11 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local fPred = function(hBuilding)
 
 			-- !!FIXME (im sleepy now i cant)
-			--do return true end
+			---do return true end
 
-			Bot:SpawnDebugEffect(hBuilding:GetPos(), "ttt"..tostring(hBuilding:GetPos()))
+			---Bot:SpawnDebugEffect(hBuilding:GetPos(), "ttt"..tostring(hBuilding:GetPos()))
 			return Pathfinding:IsEntityReachable(hBuilding), AILog(vector.distance(hBuilding:GetPos(),g_localActor:GetPos()))
-			-- ^ always bad for everything for some ODD REASON !
+			--- ^ always bad for everything for some ODD REASON !
 
 		end
 		

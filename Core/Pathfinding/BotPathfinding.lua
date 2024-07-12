@@ -1202,6 +1202,13 @@ Pathfinding.GetNearestVisibleNode = function(self, vSource)
 end
 
 ---------------------------------------------
+-- Pathfinding.SetCurrentTarget
+
+Pathfinding.SetCurrentTarget = function(self, hTarget)
+	self.CURRENT_TARGET_ENTITY = hTarget
+end
+
+---------------------------------------------
 -- Pathfinding.GetPath
 
 Pathfinding.GetPath = function(self, vSource, vTarget)
@@ -1251,6 +1258,8 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 
 	-----------------
 	if (not (
+		self:IsTargetAvailable(aGoal, aClosest) or
+		self:IsTargetAvailable(aClosest, aGoal) or
 		self:IsTargetAvailable(vClosest, vTarget) or
 		self:IsTargetAvailable(vTarget, vClosest) or
 		self:IsTargetAvailable(vTarget, vSource) or
@@ -1307,6 +1316,12 @@ Pathfinding.OnFail = function(self, vSource, vTarget)
 	self.FAILED_CACHE[sSource] = checkArray(self.FAILED_CACHE[sSource])
 	self.FAILED_CACHE[sSource][sTarget] = ((self.FAILED_CACHE[sSource][sTarget] or 0) + 1)
 
+	local hTarget = self.CURRENT_TARGET_ENTITY
+	if (hTarget) then
+		self.FAILED_CACHE[tostring(hTarget.id)] = checkArray(self.FAILED_CACHE[tostring(hTarget.id)])
+		self.FAILED_CACHE[tostring(hTarget.id)][sSource] = ((self.FAILED_CACHE[tostring(hTarget.id)][sSource] or 0) + 1)
+	end
+
 	if (not self:IsTargetAvailable(vSource, vTarget)) then
 		PathFindLog("$9[$4Error$9] Target at G(%s) is now no longer available from Source G(%s)", sTarget, sSource)
 	end
@@ -1318,6 +1333,14 @@ end
 Pathfinding.IsTargetAvailable = function(self, vSource, vTarget)
 	local sSource = string.format("x%dy%dz%d", vSource.x, vSource.y, vSource.z)
 	local sTarget = string.format("x%dy%dz%d", vTarget.x, vTarget.y, vTarget.z)
+
+	local hTarget = self.CURRENT_TARGET_ENTITY
+	if (hTarget) then
+		local aFails = self.FAILED_CACHE[tostring(hTarget.id)]
+		if (aFails and checkNumber(aFails[sSource], 0) > 3) then
+			return false
+		end
+	end
 
 	if (not self.FAILED_CACHE[sSource]) then
 		return true

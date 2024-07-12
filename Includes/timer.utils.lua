@@ -22,9 +22,15 @@ timer.new = function()
 
 	local hNew = {}
 	hNew.timer = timer.init()
+	hNew.expiry = nil
 
+	hNew.setexpiry = function(i)
+		if (isNumber(i)) then
+			hNew.expiry = i
+		end
+	end
 	hNew.expired = function(i)
-		return (timer.expired(hNew.timer, i))
+		return (timer.expired(hNew.timer, checkNumber(i, hNew.expiry)))
 	end
 	hNew.diff = function(i)
 		return (timer.diff(hNew.timer))
