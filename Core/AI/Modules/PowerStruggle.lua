@@ -7,7 +7,8 @@ BotAI:CreateAIModule("PowerStruggle", {
 	BUY_ERROR = {},
 	BUILDINGS = {},
 	CURRENT_TEAM = 0,
-	
+	SPAWN_BASE = 0,
+
 	----------
 	ModuleFullName = nil,
 	ModuleName = nil,
@@ -65,10 +66,11 @@ BotAI:CreateAIModule("PowerStruggle", {
 			if ((iDistance < 50) and (not self:IsCapturing() or self:IsInCaptureRadius(self.CURRENT_ATTENTION_TARGET, hTarget))) then
 				return true end
 			
-			if (Bot.LAST_SEEN_MOVING) then
+			if (Bot:GetLastSeen()) then
 				return false end
-			
-			if (Bot.LAST_SEEN_ENTITYID and Bot.LAST_SEEN_ENTITYID ~= hTarget.id) then
+
+			local hEntity = Bot:GetLastSeenEntity("id")
+			if (hEntity and hEntity ~= hTarget.id) then
 				return false end
 			
 			if (not Bot:IsEntityTagged(hTarget.id)) then
@@ -165,7 +167,10 @@ BotAI:CreateAIModule("PowerStruggle", {
 			
 		----------------
 		self.CURRENT_TEAM = g_gameRules.game:GetTeam(g_localActorId)
-			
+
+		----------------
+		AISetGlobal(eAI_gIsBuildingContested, self:IsContested(self.CURRENT_ATTENTION_TARGET))
+
 		----------------
 		if (not self:CheckTeam()) then
 			return end
@@ -230,7 +235,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			
 		----------------
 		if (not isNumber(iRadio)) then
-			self:AILog("Invalid RadioID specified to SendRadio()") end
+			self:AILog("Invalid RadioID specified to SendRadio(%s)", tostring(iRadio)) end
 			
 		----------------
 		if (not self.RADIO_TIMERS) then
@@ -603,14 +608,14 @@ BotAI:CreateAIModule("PowerStruggle", {
 	-----------------
 	GetAttentionPoint = function(self)
 
-		Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_None
+		Bot:ContinueMovement(eMovInterrupt_Beef)
 		self:AILog(0, "%s.GetAttentionPoint()", self.ModuleFullName)
 		
 		local hTarget = self:PostGetAttentionPoint()
 		if (hTarget) then
 			if (hTarget == 0xBEEF) then
 				self:AILog(0, "Got 0xBEEF as attention target!")
-				if (Bot:OkToProne()) then
+				if (Bot:OkToProne() and not self:IsContested(self.CURRENT_ATTENTION_TARGET)) then
 					Bot:StartProne()
 				else
 					Bot:StopProne()

@@ -16,18 +16,22 @@ Config = {
 	ServerList = { };
 	
 	-- Name of the current server
-	CurrentServer = "116.203.92.129:50002"; -- tox PS
-	CurrentServer = "116.203.92.129:64087"; -- something
+	CurrentServer = "116.203.92.129:50002"; -- tox PS	 	 (OLD)
+	CurrentServer = "116.203.92.129:64087"; -- something 	 (OLD)
+	CurrentServer = "116.203.92.129:64088"; -- something_pro (OLD)
+
 	CurrentServer = "5.9.20.51:64089"; -- gercry IA
 	CurrentServer = "178.190.213.69:64087"; -- sox elite
-	CurrentServer = "116.203.92.129:64088"; -- something_pro
-	CurrentServer = "137.186.81.229:64087"; -- something
-	CurrentServer = "116.203.92.129:55001"; -- atom
-	CurrentServer = "185.22.237.253:11502"; -- something_pro
-	CurrentServer = "127.0.0.1:66666 2020"; -- local
-	CurrentServer = "185.22.237.253:11512"; -- tox ia (new)
+	CurrentServer = "185.22.237.253:11512"; -- tox ia
+
 	CurrentServer = "127.0.0.1:66666:2020"; -- local
+
+	CurrentServer = "185.22.237.253:11502"; -- something_pro
+	CurrentServer = "185.22.237.253:11501"; -- something
+
 	CurrentServer = "94.16.110.182:64005"; -- alien
+
+	CurrentServer = "116.203.92.129:55001:1"; -- atom
 
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers

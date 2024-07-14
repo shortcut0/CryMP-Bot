@@ -22,3 +22,12 @@ BOT_ENTITY_DATA.PowerStruggle.Refinery_Pro = {
         z = 422
     }
 }
+
+-------------------
+BOT_ENTITY_DATA.PowerStruggle.Beach = {
+    ["Vehicle_Factory_Neutral"] = {
+        x = 2222,
+        y = 1342,
+        z = 126
+    }
+}

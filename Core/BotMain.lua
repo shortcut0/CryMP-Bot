@@ -72,6 +72,7 @@ BOT_ENABLED = 1
 BOT_USE_ANGLES = 1
 BOT_VIEW_ANGLES = 180
 BOT_HOSITLITY = 1
+BOT_MOVEMENT = 1
 BOT_CAN_WALLJUMP = true
 BOT_BLOCK_WEAPONS = 0
 BOT_ADJUST_AIM = 0
@@ -106,6 +107,13 @@ WEAPON_SHOTGUN = "Shotgun"
 WEAPON_SOCOM = "SOCOM"
 WEAPON_HURRICANE = "Hurricane"
 WEAPON_ALIEN = "AlienMount"
+WEAPON_RPG = "LAW"
+
+------------------------------
+
+VEHICLE_CIV = "Civ_car1"
+VEHICLE_USLtv = "US_ltv"
+VEHICLE_NKLtv = "NK_ltv"
 
 ------------------------------
 NANOMODE_NULL = -1
@@ -150,6 +158,15 @@ FRAMELOG_PRINTALL = -1
 FRAMELOG_PRINTTHRESHOLD = nil
 
 ------------------------------
+
+eCVar_StancesNormal = 0 -- Normal stance switching
+eCVar_StancesSimple = 1 -- Ignores some checks but still fails sometimes
+eCVar_StancesSimpleEx = 2 -- Can't fail
+
+eWallJumpType_Pos = 0
+eWallJumpType_Vel = 1
+
+------------------------------
 Bot = {}
 Bot.aCfg = {}
 Bot.aGlobals = {}
@@ -164,9 +181,13 @@ Bot.BOT_DEFAULT_STUCK_TIME = 2.5
 Bot.BOT_INDOORS_TIME = 2.5
 Bot.BOT_SUBTERRAIN_TIME = 0.0
 
+Bot.WALLJUMPING = nil
+Bot.WALLJUMP_SYSTEM = eWallJumpType_Pos
+
 Bot.BOT_FORCED_CVARS = {
 
 	BOT_SIMPLYFIED_MELEE = 1,
+	BOT_SIMPLYFIED_STANCES = eCVar_StancesSimpleEx,
 
 	BOT_FORCED_SPREAD = 0.001,
 	BOT_FORCED_RECOIL = 0.001,
@@ -287,6 +308,7 @@ Bot.InitCVars = function(self, aList)
 	local aCVars = checkVar(aList, {
 		{ "toggle", 	"BOT_ENABLED", 		 BOT_ENABLED, 		"Toggles the Bot System Update", "Bot:OnShutdown" },
 		{ "hostility", 	"BOT_HOSITLITY", 	 BOT_HOSITLITY, 	"Toggles Bot Hostility", nil },
+		{ "movement", 	"BOT_MOVEMENT", 	 BOT_MOVEMENT, 		"Toggles Bot Movment", nil },
 		{ "blockitems", "BOT_BLOCK_WEAPONS", BOT_BLOCK_WEAPONS, "Toggles the Bots ability to fire weapons", nil },
 		{ "adjustAim", 	"BOT_ADJUST_AIM", 	 BOT_ADJUST_AIM, 	"Toggles adjusting aim direction based on the targets velocity and speed", nil },
 
@@ -408,6 +430,9 @@ Bot.PatchDoors = function()
 	Door.Patch = function(hDoor)
 		hDoor.Properties.Rotation.fRange = Door.Properties.Rotation.fRange
 		hDoor.Client.ClRotate = Door.Client.ClRotate
+		hDoor.IsClosed = function(self)
+			return (self.action == DOOR_CLOSE)
+		end
 		--BotDLL.SetPassthroughPhysics(hDoor)
 	end
 
@@ -611,12 +636,23 @@ end
 ------------------------------
 --- Init
 Bot.OnDisconnect = function(self, hPlayer, iChannel)
+	if (not hPlayer.CONNECTED) then
+		return
+	end
+
+	hPlayer.CONNECTED = nil -- non-player spam fix
 	BotMainLog(0, "Player %s Disconnecting on Slot %d", checkString(hPlayer:GetName(), "Unknown"), iChannel);
 end
 
 ------------------------------
 --- Init
 Bot.OnPlayerConnected = function(self, hPlayer, iChannel)
+
+	if (hPlayer.CONNECTED) then
+		return
+	end
+
+	hPlayer.CONNECTED = true -- non-player spam fix
 	BotMainLog(0, "Player %s Connected on Slot %d", checkString(hPlayer:GetName(), "Unknown"), iChannel);
 end
 
@@ -860,28 +896,38 @@ Bot.ProcessWallJump = function(self)
 			return self:StopWallJump()
 		end
 
-			local aOrientation = BotNavigation:GetWallJumpPos(iPath, iCurrent)
-			if (not isArray(aOrientation)) then
-				self:ReleaseKey(KEY_FORWARD)
-				BotMainLog("not an array")
-				return self:StopWallJump()
+		local aOrientation = BotNavigation:GetWallJumpPos(iPath, iCurrent)
+		if (not isArray(aOrientation)) then
+			self:ReleaseKey(KEY_FORWARD)
+			BotMainLog("not an array")
+			return self:StopWallJump()
+		end
+
+		local vPos = aOrientation[1]
+		local vDir = aOrientation[2]
+		local vVel = aOrientation[3]
+		local iDistance = vector.distance(vPos, vBot)
+
+		local iType = self.WALLJUMP_SYSTEM
+		if (iType == eWallJumpType_Vel) then -- Velocity based (might look more real??)
+			if (vector.isvector(vVel)) then
+				Bot:SetVelocity(vVel)
+				self:PressKey(KEY_FORWARD)
 			end
-			local vPos = aOrientation[1]
-			local vDir = aOrientation[2]
-			local iDistance = vector.distance(vPos, vBot)
 
-		if (vector.isvector(vPos)) then
-			g_localActor:SetPos(vPos)
-			g_localActor:AddImpulse(-1, g_localActor:GetCenterOfMassPos(), vector.getdir(vPos, vBot, true), 999, 1)
-			self:PressKey(KEY_FORWARD)
+		elseif (iType == eWallJumpType_Pos) then -- Position based (looks stuttery on high ping)
+			if (vector.isvector(vPos)) then
+				g_localActor:SetPos(vPos)
+				g_localActor:AddImpulse(-1, g_localActor:GetCenterOfMassPos(), vector.getdir(vPos, vBot, true), 999, 1)
+				self:PressKey(KEY_FORWARD)
+			end
+
+			if (vector.isvector(vDir) and not self:HasTarget()) then
+				--self.FORCED_CAM_LOOKAT = vDir
+				--self.FORCED_CAM_SPEED = 99
+				g_localActor.actor:SetSmoothDirection(vDir, 10)
+			end
 		end
-
-		if (vector.isvector(vDir) and not self:HasTarget()) then
-			--self.FORCED_CAM_LOOKAT = vDir
-			--self.FORCED_CAM_SPEED = 99
-			g_localActor.actor:SetSmoothDirection(vDir, 10)
-		end
-
 		self.WALLJUMPING_LAST_MOVE = timerinit()
 
 		--BotMainLog("Index = %d", iCurrent)
@@ -1447,8 +1493,27 @@ end
 
 ------------------------------
 --- Init
+Bot.IsUnderwater = function(self, vCheck, iThreshold)
+
+	local vPos = checkVar(vCheck, self:GetPos())
+	local iWater = CryAction.GetWaterInfo(vPos)
+	if (not iWater) then
+		return false
+	end
+
+	return (vPos.z - iWater > checkVar(iThreshold, 1))
+end
+
+------------------------------
+--- Init
 Bot.IsSwimming = function(self)
 	return (self:GetStance(STANCE_SWIM))
+end
+
+------------------------------
+--- Init
+Bot.IsDiving = function(self)
+	return (self:IsSwimming() and self:IsUnderwater())
 end
 
 ------------------------------
@@ -1938,6 +2003,38 @@ end
 
 ------------------------------
 --- Init
+Bot.GetVehicle = function(self, hCheck)
+
+	local idVehicle = checkVar(g_localActor, hCheck).actor:GetLinkedVehicleId()
+	if (not idVehicle) then
+		return
+	end
+
+	return GetEntity(idVehicle)
+end
+
+------------------------------
+--- Init
+Bot.GetVehicleType = function(self, hCheck)
+
+	local sType
+	local hCheck = checkVar(g_localActor, hCheck)
+	if (isArray(hCheck)) then
+		if (hCheck.vehicle) then
+			sType = hCheck.class
+		elseif (hCheck.actor) then
+			local hVehicle = self:GetVehicle(hCheck)
+			if (hVehicle) then
+				sType = hVehicle.class
+			end
+		end
+	end
+
+	return sType
+end
+
+------------------------------
+--- Init
 Bot.SpaceInInventory = function(self, sClass)
 
 	---------------
@@ -1965,6 +2062,7 @@ Bot.SetItem = function(self, sClass)
 	local hCurrentItem = self:GetItem()
 	if (not hCurrentItem or hCurrentItem.class ~= sClass) then
 		g_localActor.actor:SelectItemByName(sClass)
+		BotMainLog("Set item %s", sClass)
 	end
 end
 
@@ -2447,6 +2545,12 @@ Bot.UpdateItem = function(self, bForce)
 		return false
 	end
 
+	local hVehicle = self:GetVehicle(hTarget)
+	local iVehicle = self:GetVehicleType(hVehicle)
+	if (self.COMBAT_RELOAD_TIMER and not self.COMBAT_RELOAD_TIMER.expired()) then
+		return
+	end
+
 	local hCurrentItem = self:GetItem()
 	local aInventory = self:GetInventory()
 	if (not isArray(aInventory)) then
@@ -2456,7 +2560,17 @@ Bot.UpdateItem = function(self, bForce)
 	local bSelected = false
 	local iDistance = self:GetDistance(hTarget)
 	local bAmmoOk = self:AmmoOk(hCurrentItem)
+	local iRPGSpeed = -1
+
 	BotMainLog("ammo ok= %s",string.bool(bAmmoOk))
+
+	local bRPG = (self:HasItem(WEAPON_RPG) and self:AmmoOk(WEAPON_RPG))
+	if (bRPG and hVehicle) then
+		if (hTarget:GetSpeed() > iRPGSpeed or iVehicle ~= VEHICLE_CIV) then
+			self:SetItem(WEAPON_RPG)
+			return
+		end
+	end
 
 	local bDSG = (self:HasItem(WEAPON_DSG) and self:AmmoOk(WEAPON_DSG))
 	local bGauss = (self:HasItem(WEAPON_GAUSS) and self:AmmoOk(WEAPON_GAUSS))
@@ -2472,11 +2586,13 @@ Bot.UpdateItem = function(self, bForce)
 
 	if (false and iDistance < 8 and bShotgun) then
 		self:SetItem(WEAPON_SHOTGUN)
-		BotMainLog("using shotgun!! %f",iDistance)
+		bSelected = true
 	elseif (iDistance > 75 and (bDSG or bGauss)) then
 		self:SetItem((bGauss and WEAPON_GAUSS or WEAPON_DSG))
+		bSelected = true
 	elseif (iDistance > 15 and (bFY71 or bSCAR)) then
 		self:SetItem((bFY71 and WEAPON_FY71 or WEAPON_SCAR))
+		bSelected = true
 	elseif (bSeekBetter) then
 
 		local hWeapon
@@ -2513,6 +2629,15 @@ Bot.UpdateItem = function(self, bForce)
 			self.CURRENT_ITEM = hSelected
 			bSelected = true
 			BotMainLog("selected%s",hSelected.class)
+		elseif (hPanicSelect and not bAmmoOk) then
+			if (iDistance > 10) then
+				self.COMBAT_RELOAD_TIMER = timernew(5)
+				self:ReloadWeapon(hPanicSelect)
+				BotMainLog("inventory ammo ok, reload!")
+			else
+				self:SetItem("Fists")
+				return
+			end
 		elseif (not bSeekBetter) then
 			bSelected = true
 		end
@@ -2676,6 +2801,7 @@ end
 ------------------------------
 --- Init
 Bot.ClearTarget = function(self)
+
 	local hTarget = self:GetTarget()
 	if (hTarget) then
 		hTarget.LAST_SEEN_TIMER = nil
@@ -2683,6 +2809,7 @@ Bot.ClearTarget = function(self)
 	end
 
 	self.LAST_SEEN_CLEAR = nil
+	--self.LAST_SEEN_TARGET = nil -- in SetTarget()
 
 	self:StopMovement()
 	self:SetTarget(NULL_ENTITY)
@@ -2703,6 +2830,10 @@ Bot.UpdateTargets = function(self)
 	local hNewTarget = self:CheckForTargets()
 	local hTarget = self.CURRENT_TARGET
 	if (hTarget) then
+
+		if (self:IsSwimming()) then
+			return false
+		end
 
 		if (not GetEntity(hTarget.id)) then
 			return false, self:ClearTarget()
@@ -2871,7 +3002,44 @@ end
 
 ------------------------------
 --- Init
+Bot.SetLastSeen = function(self, bActivate)
+	self.LAST_SEEN_MOVING = (bActivate)
+end
+
+------------------------------
+--- Init
+Bot.SetLastSeenTarget = function(self, hTarget)
+	self.LAST_SEEN_TARGET = (hTarget)
+end
+
+------------------------------
+--- Init
+Bot.GetLastSeen = function(self, bActivate)
+	return (self.LAST_SEEN_MOVING)
+end
+
+------------------------------
+--- Init
+Bot.GetLastSeenEntity = function(self, sMember)
+
+	local hTarget = self.LAST_SEEN_TARGET
+	if (not hTarget) then
+		return nil
+	end
+
+	if (sMember) then
+		return hTarget[sMember]
+	end
+
+	return hTarget
+end
+
+------------------------------
+--- Init
 Bot.ProcessLastSeenMovement = function(self)
+
+	self:SetLastSeen(false)
+	self:SetLastSeenTarget()
 
 	local hNewTarget = self:CheckForTargets()
 	local hTarget = self.CURRENT_TARGET
@@ -2908,6 +3076,8 @@ Bot.ProcessLastSeenMovement = function(self)
 		hTarget.LAST_SEEN_TIMER = timerinit()
 	end
 
+	self:SetLastSeen(true)
+	self:SetLastSeenTarget(hTarget)
 	BotMainLog("LAST SEEN !!")
 end
 
@@ -3223,6 +3393,10 @@ end
 --- Init
 Bot.UpdateMovement = function(self)
 
+	if (BOT_MOVEMENT < 0) then
+		return self:StopMovement()
+	end
+
 	if (not self:CheckRecorders()) then
 		if (not self:IsWallJumping() and timerexpired(self.WALLJUMPING_END, 1)) then
 			return self:GoIdle()
@@ -3307,7 +3481,7 @@ Bot.UpdateMovement = function(self)
 		end
 
 		local bSwimming = self:IsSwimming()
-		if (bSwimming) then
+		if (bSwimming and not BotNavigation:IsCurrentNodeUnderwater()) then
 			self:StartJump()
 		end
 
@@ -3320,7 +3494,9 @@ Bot.UpdateMovement = function(self)
 				self.LAST_USED_DOOR = hDoor
 				self.LAST_USED_DOOR_STATE = hDoor.action
 
-				self:InterruptMovement(eMovInterrupt_DoorPause, 3)
+				if (hDoor:IsClosed()) then
+					self:InterruptMovement(eMovInterrupt_DoorPause, 1)
+				end
 			end
 		elseif (hDoor and timerexpired(hDoor.USE_TIMER, 1)) then
 			local hLastDoor = self.LAST_USED_DOOR
@@ -3456,8 +3632,13 @@ end
 
 ------------------------------
 --- Init
-Bot.ContinueMovement = function(self)
-	self.MOVEMENT_INTERRUPTED = nil
+Bot.ContinueMovement = function(self, iCase)
+
+	if (iCase and iCase ~= self.MOVEMENT_INTERRUPTED) then
+		return
+	end
+
+	self.MOVEMENT_INTERRUPTED = eMovInterrupt_None
 	self.MOVEMENT_INTERRUPTED_TIMER = nil
 	self.MOVEMENT_INTERRUPTED_EXPIRY = nil
 end

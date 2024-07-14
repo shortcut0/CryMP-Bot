@@ -15,19 +15,23 @@ timer = {
 ---------------------------
 -- luautils.new
 
-timer.new = function()
+timer.new = function(expiry)
 
 	-----------
 	local timer = timer
 
 	local hNew = {}
 	hNew.timer = timer.init()
-	hNew.expiry = nil
+	hNew.expiry = expiry
 
 	hNew.setexpiry = function(i)
 		if (isNumber(i)) then
 			hNew.expiry = i
 		end
+	end
+	hNew.refresh = function(i)
+		hNew.timer = timer.init()
+		hNew.expiry = checkVar(i, hNew.expiry)
 	end
 	hNew.expired = function(i)
 		return (timer.expired(hNew.timer, checkNumber(i, hNew.expiry)))

@@ -47,10 +47,22 @@ CURRENT_MODULE_PATH = nil
 
 -------------------
 
+BotAI.SHARED_VARS = {}
 BotAI.AI_MODULES = {}
 BotAI.AI_SV_MODULES = {}
 BotAI.CURRENT_SV_MODULE = nil
 BotAI.CURRENT_MODULE = nil
+
+-------------------
+
+eAI_gIsBuildingContested = "isContested"
+eAI_gInBuyArea = "inBuyArea"
+eAI_gInCaptureZone = "inCaptureZone"
+
+-------------------
+
+AISetGlobal = GetDummyFunc()
+AIGetGlobal = GetDummyFunc()
 
 -------------------
 -- Init
@@ -60,7 +72,10 @@ BotAI.Init = function(self, bReload)
 	------------
 	if (bReload) then
 		self.AI_MODULES = {} end
-	
+
+	AISetGlobal = self.SetGlobal
+	AIGetGlobal = self.GetGlobal
+
 	------------
 	AILog("BotAI.Init()")
 	
@@ -489,6 +504,20 @@ BotAI.RegisterFunctionsForModule = function(aModule)
 	
 end
 
+
+-------------------
+-- GetGlobal
+
+BotAI.GetGlobal = function(hGlobal)
+	return BotAI.SHARED_VARS[hGlobal]
+end
+
+-------------------
+-- StGlobal
+
+BotAI.SetGlobal = function(hGlobal, hValue)
+	BotAI.SHARED_VARS[hGlobal] = hValue
+end
 
 -------------------
 -- CallSvEvent

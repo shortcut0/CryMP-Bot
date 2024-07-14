@@ -22,10 +22,35 @@ vectors = {
 }
 
 ---------------------------
+-- vector.newvec ???
+
+vector.newvec = function(x, y, z)
+
+	local vNew = table.copy(vector)
+
+	vNew.IS_VECTOR = true
+	if (vNew.isvector(x)) then
+		vNew.x = x.x
+		vNew.y = x.y
+		vNew.z = x.z
+	else
+		vNew.x = checkNumber(x, 0)
+		vNew.y = checkNumber(y, 0)
+		vNew.z = checkNumber(z, 0)
+	end
+
+	vNew.expose = function()
+		return { vNew.x, vNew.y, vNew.z }
+	end
+
+	return vNew
+end
+
+---------------------------
 -- vector.isvector
 
 vector.isvector = function(v)
-	return (isArray(v) and table.count(v) == 3 and (isNumber(v.x) and isNumber(v.y) and isNumber(v.z)))
+	return (isArray(v) and (table.count(v) == 3 or v.IS_VECTOR) and (isNumber(v.x) and isNumber(v.y) and isNumber(v.z)))
 end
 
 ---------------------------
@@ -39,14 +64,14 @@ end
 -- vector.isvector
 
 vector.is2dvector = function(v)
-	return (isArray(v) and table.count(v) == 2 and (isNumber(v.x) and isNumber(v.y)))
+	return (isArray(v) and (table.count(v) == 2 or v.IS_VECTOR) and (isNumber(v.x) and isNumber(v.y)))
 end
 
 ---------------------------
 -- vector.isvector
 
 vector.is1dvector = function(v)
-	return (isArray(v) and table.count(v) == 1 and (isNumber(v.x)))
+	return (isArray(v) and (table.count(v) == 1 or v.IS_VECTOR) and (isNumber(v.x)))
 end
 
 ---------------------------

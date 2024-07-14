@@ -814,7 +814,8 @@ end
 -- Init
 BotMain.IsBlacklistedReason = function(self, r)
 
-	return (String.findex(r, checkArray(self.RECONNECT_REASONS_BLACKLIST)))
+	-- causes stack overflow (BUT WHy????)
+	return (string.findex(r, unpack(checkArray(self.RECONNECT_REASONS_BLACKLIST))))
 	--local sReason = string.lower(r)
 	--for i, listed in pairs(self.RECONNECT_REASONS_BLACKLIST or{}) do
 	--	if (string.find(sReason, listed:lower())) then

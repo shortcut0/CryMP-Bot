@@ -390,7 +390,7 @@ BotAPI.Events.SafeCall = function(self, fFunc, ...)
 		local sFunc = table.lookupRec(_G, fFunc) -- Lookup in _G, not optimal !!
 		local bOk, hRes = pcall(fFunc, ...)
 		if (not bOk) then
-			SetError("SafeCall failed to execute function " .. tostring(functionName), (hRes or "<No Error Info>"))
+			SetError("SafeCall failed to execute function " .. tostring(sFunc), (hRes or "<No Error Info>"))
 			return BotMain:FinchError(false)
 		end
 		
@@ -398,7 +398,7 @@ BotAPI.Events.SafeCall = function(self, fFunc, ...)
 		if (fFunc == loadfile) then
 			bOk, hRes = pcall(hRes)
 			if (not bOk) then
-				SetError("SafeCall failed to load function " .. tostring(functionName), (hRes or "<No Error Info>"))
+				SetError("SafeCall failed to load function " .. tostring(sFunc), (hRes or "<No Error Info>"))
 				return BotMain:FinchError(false)
 			end
 		end

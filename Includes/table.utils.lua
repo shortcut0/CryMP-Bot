@@ -283,7 +283,7 @@ end
 -- table.isarray
 
 table.isarray = function(t)
-	return type(t) == "table"
+	return (type(t) == "table")
 end
 
 ---------------------------

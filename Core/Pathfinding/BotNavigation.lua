@@ -339,9 +339,25 @@ BotNavigation.Update = function(self)
 	end
 	
 	----------------
+	local bAdvancedPath = false
+	local vPos = g_localActor:GetPos()
+	local iClosest, vClosest = self:GetClosestNodeOnPath(vPos)
+	if (hCurrentNode and iClosest and iClosest > self.CURRENT_PATH_NODE and vector.distance(vClosest, vPos) < vector.distance(hCurrentNode, vPos)) then
+		if (self:IsNodeVisibleEx(vClosest)) then
+			self.CURRENT_PATH_NODE = (iClosest - 1)
+			bAdvancedPath = true
+			PathFindLog("surpassed by far! set %d to next", iClosest)
+		end
+	end
+
+	----------------
 	if (not hCurrentNode) then
 		bUpdate = true
 		sUpdate = "No Current Node!!"
+
+	elseif (bAdvancedPath) then
+		bUpdate = true
+		sUpdate = "Advanced on path (somehow)"
 		
 	elseif (self.CURRENT_NODE_SURPASSED) then
 		bUpdate = true
@@ -367,7 +383,7 @@ BotNavigation.Update = function(self)
 
 	-- Experimental!!
 	elseif (not bReverted and self.CURRENT_PATH_WAS_REVERTED) then
-		if (self:IsNodeVisibleEx(self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_PREVIOUS_NODE])) then
+		if (not Bot:IsIndoors() and self:IsNodeVisibleEx(self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_PREVIOUS_NODE])) then
 			bUpdate = true
 			sUpdate = "Previus Reverted node is now visible!!"
 		
@@ -417,6 +433,31 @@ BotNavigation.Update = function(self)
 		
 	----------------
 	return bReturn
+end
+
+---------------------------
+-- GetClosestNodeOnPath
+
+BotNavigation.GetClosestNodeOnPath = function(self, vPos)
+
+	local aPath = self.CURRENT_PATH_ARRAY
+	if (not aPath) then
+		return
+	end
+
+	local aBest = { -1 }
+	for iNode, vNode in pairs(aPath) do
+		local iDistance = vector.distance(vPos, vNode)
+		if (aBest[1] == -1 or iDistance < aBest[1]) then
+			aBest = {
+				iDistance,
+				iNode,
+				vNode
+			}
+		end
+	end
+
+	return aBest[2], aBest[3]
 end
 
 ---------------------------
@@ -656,7 +697,7 @@ BotNavigation.CanSeeNextNode = function(self)
 	local vNextNode = self.CURRENT_PATH_ARRAY[(iNode + 1)]
 	
 	local iZDiff = (vNode.z - vNextNode.z)
-	if (iZDiff > 0.175 or iZDiff < -0.175) then
+	if (not Bot:IsSwimming() and (iZDiff > 0.175 or iZDiff < -0.175)) then
 		self:Log(0, "Ignoring next node because its ELEVATED!!")
 		return false end
 	
@@ -824,15 +865,33 @@ BotNavigation.IsNodeBelow = function(self, vNode)
 	end
 
 ---------------------------
+-- IsCurrentNodeUnderwater
+
+BotNavigation.IsCurrentNodeUnderwater = function(self)
+
+		local iCurrent = self.CURRENT_PATH_NODE
+		if (not iCurrent) then
+				return
+		end
+		
+		-----------
+		local vNode = self.CURRENT_PATH_ARRAY[iCurrent]
+
+		
+		-----------
+		return (Bot:IsUnderwater(vNode, 0.25))
+	end
+
+---------------------------
 -- IsNodeAbove
 
 BotNavigation.IsNodeAbove = function(self, vNode)
 		local vPos = g_localActor:GetPos()
 		local zDiff = vNode.z - vPos.z
-		
+
 		-----------
 		-- self:Log(0, "Is Node Above: %s (%f)", ((zDiff > 1) and "Yes" or "No"), zDiff)
-		
+
 		-----------
 		return (zDiff > 0.8)
 	end
@@ -889,8 +948,8 @@ BotNavigation.IsNextNodeCloser = function(self, iNode)
 		
 		-----------
 		local iZDiff = hNextNode.z - hCurrentNode.z
-		if ((iZDiff > 0.1 or iZDiff < -0.1)) then
-			self:Log(0, "Ignoring Next node despite it being closer (ITS EVELVATED!)")
+		if (not Bot:IsSwimming() and (iZDiff > 0.1 or iZDiff < -0.1)) then
+			self:Log(0, "Ignoring Next node despite it being closer (ITS ELEVATED!)")
 			return false
 		end
 		
