@@ -66,6 +66,22 @@ $${\color{green}DONE:}$$
       - Bot no longer jumps or sprints inside buildings since it caused it to get stuck on corners or miss waypoint nodes
       - Updated Includes
       - Minor changes to Pathfinding
+  * [14.07.2024]
+    * Minor fixes to item selection handler
+      - No longer trying to select and fire items when swimming
+      - Fixed a bug where bot would endlessly cycle between perfectly operational items
+      - Bot uses RPG on vehicles if appropriate (TODO: target is near vehicle)
+    * Unlocked stance switching in C++ to allow bot to unprone all the time (BOT_SIMPLYFIED_STANCES >= { 1, 2 })
+      - >0, ignores some checks, >=2, ignores all checks (but sometimes causes character collision to glitch out)
+    * Log spam fix
+      - When a non-player entitiy was spawned (connected) or removed (disconnected)
+    * Fixes to Navigation System
+      - Ability to skip nodes if bot somehow already advanced on it's path without ever reaching it's original WP
+    * Changes to PathFinding System
+      - Bot can now swim and dive and follow underwater waypoints
+      - Rewrote some link validation code for better linking
+      - Updated Fail handler
+      - Fixed a bug where exporting navmesh failed to open the file for writing
   
 ---------------------------
 $${\color{pink}-shortcut0 <3}$$
