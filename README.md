@@ -14,7 +14,7 @@ $${\color{orange}INSTALL:}$$
 ---------------------------
 
 $${\color{red}TODO:}$$
-  + Nothing? Fix Bugs??
+  + Nothing? Fix Bugs?!
 
 ---------------------------
 $${\color{green}DONE:}$$
@@ -55,6 +55,17 @@ $${\color{green}DONE:}$$
       - Bot is less likely to get stuck or go for swims.
       - The Bot no longer runs around aimlessly hoping to find targets, but instead uses a state-of-the-art X-Ray Wallhack system to locate unsuspecting victims!
     * Much more but i dont recall it
+  * [12.07.2024]
+    * Changes to item selection and a temporary fix that prevents the bot from using fists when there are perfectly operational items in its inventory
+    * Created Servers.lua
+      - Definition source for custom server addresses (and ports)
+    * Created server-specific AI modules
+      - Located in Core\AI\ServerModules
+      - These modules are only executed on specific servers
+    * Some minor changes and updates
+      - Bot no longer jumps or sprints inside buildings since it caused it to get stuck on corners or miss waypoint nodes
+      - Updated Includes
+      - Minor changes to Pathfinding
   
 ---------------------------
 $${\color{pink}-shortcut0 <3}$$
