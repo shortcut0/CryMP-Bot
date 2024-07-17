@@ -295,6 +295,44 @@ vector.addN = function(v, i, sKey)
 end
 
 ---------------------------
+-- vector.cross
+
+vector.cross = function(v1, v2)
+
+	------------------
+	if (not vector.isvector(v1)) then
+		return end
+
+	------------------
+	if (not vector.isvector(v2)) then
+		return end
+
+	------------------
+	return {
+		x = (v1.y * v2.z - v1.z * v2.y),
+		y = (v1.z * v2.x - v1.x * v2.z),
+		z = (v1.x * v2.y - v1.y * v2.x)
+	}
+end
+
+---------------------------
+-- vector.dot
+
+vector.dot = function(v1, v2)
+
+	------------------
+	if (not vector.isvector(v1)) then
+		return end
+
+	------------------
+	if (not vector.isvector(v2)) then
+		return end
+
+	------------------
+	return (v1.x * v2.x + v1.y * v2.y + v1.z * v2.z)
+end
+
+---------------------------
 -- vector.sub
 
 vector.sub = function(v1, v2)
@@ -302,16 +340,16 @@ vector.sub = function(v1, v2)
 	------------------
 	if (not vector.isvector(v1)) then
 		return end
-		
+
 	------------------
 	if (not vector.isvector(v2)) then
 		return end
-	
+
 	------------------
 	v1.x = v1.x - v2.x
 	v1.y = v1.y - v2.y
 	v1.z = v1.z - v2.z
-	
+
 	------------------
 	return v1
 end
@@ -341,9 +379,22 @@ vector.normalize = function(v)
 	------------------
 	if (not vector.isvector(v)) then
 		return v end
-	
+
 	------------------
-	return vecNormalize(v)
+	if (vecNormalize) then
+		return vecNormalize(v)
+	end
+
+	local iMag = math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+	if (iMag == 0) then
+		return vector.new()
+	end
+
+	return {
+		x = v.x / iMag,
+		y = v.y / iMag,
+		z = v.z / iMag
+	}
 end
 
 ---------------------------
@@ -393,6 +444,38 @@ vector.getdir = function(v1, v2, bNormalize, iScale)
 
 	------------------
 	return vDirection
+end
+
+---------------------------
+-- vector.getyawpitch
+
+vector.getyawpitch = function(vDir)
+
+	if (not vector.isvector(vDir)) then
+		return
+	end
+
+	local iX = vDir.x
+	local iY = vDir.y
+	local iZ = vDir.z
+
+
+	local iMag = math.sqrt(iX * iX + iY * iY + iZ * iZ)
+	local iYaw = math.atan2(iY, iX)
+	local iPitch = math.asin(iZ / iMag)
+
+	-- Convert yaw and pitch from radians to degrees (optional)
+	local iYaw_Deg = math.deg(iYaw)
+	local iPitch_Deg = math.deg(iPitch)
+
+	return iYaw_Deg, iPitch_Deg
+end
+
+---------------------------
+-- vector.getang
+
+vector.length = function(v)
+	return math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
 end
 
 ---------------------------

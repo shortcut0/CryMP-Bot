@@ -9,6 +9,9 @@ BotAI:CreateAIModule("PowerStruggle", {
 	CURRENT_TEAM = 0,
 	SPAWN_BASE = 0,
 
+	CURRENT_CONTESTED_TARGET = nil,
+	CURRENT_ATTENTION_TARGET = nil,
+
 	----------
 	ModuleFullName = nil,
 	ModuleName = nil,
@@ -55,6 +58,27 @@ BotAI:CreateAIModule("PowerStruggle", {
 			return self:GetAttentionPoint()
 		end,
 	
+		------------------------------
+		-- OkInVehicle
+		OkInVehicle = function(self, hVehicle)
+
+			-- true means we can stay
+			-- false to leave (always)
+
+			local vPos = g_localActor:GetPos()
+			local hCurr = self.CURRENT_ATTENTION_TARGET
+			if (hCurr) then
+				if (self:IsInCaptureRadius(hCurr, g_localActorId)) then
+					if (hCurr.BUILDING_TYPE == BUILDING_SPAWN and hVehicle:IsSmall()) then
+						return false
+					end
+				end
+			end
+
+			-- All Good
+			return true
+		end,
+
 		------------------------------
 		-- IsTargetOk
 		IsTargetOk = function(self, hTarget, iDistance)
@@ -284,6 +308,16 @@ BotAI:CreateAIModule("PowerStruggle", {
 		----------------
 		return true
 	end,
+
+	------------------------------
+	-- CheckTeam
+
+	CheckEntityTeam = function(self, hEnt)
+		self:AILog(0, "%s.CheckEntityTeam()", self.ModuleFullName)
+
+		----------------
+		return Bot:IsTarget_SameTeam(hEnt)
+	end,
 	
 	------------------------------
 	-- ChangeTeam
@@ -432,6 +466,14 @@ BotAI:CreateAIModule("PowerStruggle", {
 		TEAM_RANDOM = 4
 		
 		----------------
+		BUILDING_ALIEN  = "alien"
+		BUILDING_SPAWN  = "spawn"
+		BUILDING_WAR 	= "war"
+		BUILDING_SMALL 	= "small"
+		BUILDING_PROTO  = "prototype"
+		BUILDING_ANY	= "ANY"
+
+		----------------
 		RADIO_YES = 0
 		RADIO_NO = 1
 		RADIO_WAIT = 2
@@ -493,6 +535,18 @@ BotAI:CreateAIModule("PowerStruggle", {
 		g_gameRules.Client.OnContested = function(self, hBuilding, bContested)
 			AIModule:SetContested(hBuilding, bContested)
 			AIModule:AILog(0, "NOW CONTESTED!")
+		end
+
+		----------------
+		g_gameRules.Client.OnStartUncapture = function(self, hBuilding, iTeam)
+			AIModule:SetContested(hBuilding, (iTeam ~= CURRENT_TEAM))
+			AIModule:AILog(0, "NOW CONTESTED!")
+		end
+
+		----------------
+		g_gameRules.Client.OnCancelUncapture = function(self, hBuilding, iTeam)
+			AIModule:SetContested(hBuilding, (iTeam ~= CURRENT_TEAM))
+			AIModule:AILog(0, "NOT CONTESTED!")
 		end
 		
 		----------------
@@ -556,12 +610,14 @@ BotAI:CreateAIModule("PowerStruggle", {
 		for i, hEntity in pairs(table.append(aFactories, aSpawns, aAlienPoints)) do
 			self:AILog(0, "%s->%s", hEntity:GetName(), hEntity.Properties.teamName)
 			if (hEntity.Properties.teamName == "") then
-			
+
 				----------
 				local sBuildingType = (hEntity.Properties.szName or "")
 				if (hEntity.class == "AlienEnergyPoint") then
-					sBuildingType = "alien" elseif (hEntity.class == "SpawnGroup") then
-						sBuildingType = "spawn" end
+					sBuildingType = BUILDING_ALIEN
+				elseif (hEntity.class == "SpawnGroup") then
+						sBuildingType = BUILDING_SPAWN
+				end
 				
 				----------
 				self:AILog(0, "	szName: %s (%s)", (hEntity.Properties.szName or ""), sBuildingType)
@@ -608,21 +664,25 @@ BotAI:CreateAIModule("PowerStruggle", {
 	-----------------
 	GetAttentionPoint = function(self)
 
+		-----
 		Bot:ContinueMovement(eMovInterrupt_Beef)
 		self:AILog(0, "%s.GetAttentionPoint()", self.ModuleFullName)
-		
-		local hTarget = self:PostGetAttentionPoint()
+
+		-----
+		local hTarget, bIsContestant = self:PostGetAttentionPoint()
+		local hCurrent = self.CURRENT_ATTENTION_TARGET
 		if (hTarget) then
 			if (hTarget == 0xBEEF) then
 				self:AILog(0, "Got 0xBEEF as attention target!")
-				if (Bot:OkToProne() and not self:IsContested(self.CURRENT_ATTENTION_TARGET)) then
+				if (Bot:OkToProne() and not self:IsContested(hCurrent) and not self:CheckEntityTeam(hCurrent)) then
 					Bot:StartProne()
+					self.PRONING = true
 				else
 					Bot:StopProne()
 				end
 
 				--Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_Beef
-				if (not self:IsContested(self.CURRENT_ATTENTION_TARGET)) then
+				if (not self:IsContested(hCurrent)) then
 					Bot:InterruptMovement(eMovInterrupt_Beef)
 				else
 					self:AILog("not pausing, theres contestants!!")
@@ -631,11 +691,28 @@ BotAI:CreateAIModule("PowerStruggle", {
 				return
 			end
 
+			if (hCurrent and (hCurrent ~= hTarget or hTarget ~= BotNavigation.CURRENT_PATH_TARGET)) then
+				BotNavigation:ResetPathData()
+				AILog("reset data, target changed")
+			end
+
 			self:AILog(0, "Target ok")
-			self.CURRENT_ATTENTION_TARGET = hTarget
+			if (self.PRONING) then
+				Bot:StopProne()
+				self.PRONING = false
+			end
+
+			if (bIsContestant) then
+				AILog("We got contestant instead of building !!")
+				self.CURRENT_CONTESTED_TARGET = hTarget
+			else
+				self.CURRENT_CONTESTED_TARGET = nil
+				self.CURRENT_ATTENTION_TARGET = hTarget
+			end
 		else
 			self:AILog(0, "Reset all!")
 			self.CURRENT_ATTENTION_TARGET = nil
+			self.CURRENT_CONTESTED_TARGET = nil
 			
 			-- Experimental (refresh everything now and then)
 			 BotNavigation:ResetPathData() -- Causes massive lag spikes !! oww
@@ -647,7 +724,9 @@ BotAI:CreateAIModule("PowerStruggle", {
 				self:AILog(0, "We're still buying equipment !")
 				BotNavigation:ResetPath()
 				BotNavigation:SetSleepTimer(0.5)
-				return end end
+				return
+			end
+		end
 
 		return hTarget
 	end,
@@ -658,7 +737,10 @@ BotAI:CreateAIModule("PowerStruggle", {
 		
 		if (not self.CONTESTED_FACTORIES) then
 			return false end
-			
+
+		if (not hBuilding) then
+			return false end
+
 		return (self.CONTESTED_FACTORIES[hBuilding.id] == true)
 	end,
 	
@@ -672,87 +754,309 @@ BotAI:CreateAIModule("PowerStruggle", {
 		---------
 		if (BotNavigation.LAST_PATHGEN_FAILED) then
 			BotNavigation:SetSleepTimer(1) end
-		
+
 		---------
-		if (self.CURRENT_ATTENTION_TARGET) then
-			self:AILog(0, "checking attention target (In Radius: %s, Correct Team: %s)", string.bool(self:IsInCaptureRadius(self.CURRENT_ATTENTION_TARGET), "yes", "no"), string.bool(not self:CompareTeams(self.CURRENT_ATTENTION_TARGET, g_localActor), "yes", "no"))
-			if (self:IsInCaptureRadius(self.CURRENT_ATTENTION_TARGET) and not self:CompareTeams(self.CURRENT_ATTENTION_TARGET, g_localActor)) then
-				self:AILog(0, "Already at attention target !!")
+		--- Step 1. Check if proto is uncaptured
+		--- Step 2. Check if there is an uncaptured spawn nearby
+		---			If proto is uncaptured, and there is an uncaptured spawn, take that first
+		---			Then take the prototype factory
+		--- Step 3. Check for any other uncaptured building in the proto area
+		---			If there are any, capture them
+		---
+		---
+		---------
+
+		local fPred = function(hBuilding)
+			return Pathfinding:IsEntityReachable(hBuilding)
+		end
+
+		----
+		local hCurrent = self.CURRENT_ATTENTION_TARGET
+		local iCurrentDistance, vCurrent, bCurrentCaptured, bCurrentInCaptureRadius, bCurrentContested, bCapturingAny
+
+		----
+		local bProtoCaptured, hProto = self:IsBuildingCaptured(BUILDING_PROTO)
+		local vProto = hProto:GetPos()
+		local iProtoRange = 175
+		local iProtoDistance = vector.distance(vPos, vProto)
+		local bInProtoArea = (iProtoDistance < (iProtoRange * 1.25))
+
+		----
+		local hInside = self.INSIDE_CAPTURE_AREA
+		local bInsideCaptured = false
+		if (hInside) then
+			bInsideCaptured = Bot:IsTarget_SameTeam(hInside)
+		end
+
+		----
+		local hNearbySpawn = self:GetUncapturedBuilding(BUILDING_SPAWN, vProto, iProtoRange, fPred)
+		local hAnyUncaptured = self:GetUncapturedBuilding(BUILDING_ANY, vProto, iProtoRange, fPred)
+
+		----
+		local bProtoContested = self:GetContestedBuilding(BUILDING_PROTO, vProto, iProtoRange, fPred)
+		local hNearbyContested = self:GetContestedBuilding(BUILDING_SPAWN, vProto, iProtoRange, fPred)
+		local hAnyContested = self:GetContestedBuilding(BUILDING_ANY, vProto, iProtoRange, fPred)
+		AILog("bProtoContested=%s",tostring(bProtoContested))
+		AILog("hNearbyContested=%s",tostring(hNearbyContested))
+		AILog("hAnyContested=%s",tostring(hAnyContested))
+
+		----
+		local hClosestAlien = self:GetUncapturedBuilding(BUILDING_ALIEN, vPos, 99999)
+		local hClosestSpawn = self:GetUncapturedBuilding(BUILDING_SPAWN, vPos, 99999)
+		local hClosestWarF = self:GetUncapturedBuilding(BUILDING_WAR, vPos, 99999)
+		local hClosestSmallF = self:GetUncapturedBuilding(BUILDING_SMALL, vPos, 99999)
+		local hClosestAny = self:GetUncapturedBuilding(BUILDING_ANY, vPos, 99999)
+
+		----
+		--AILog("Closest alien: %s %f", hClosestAlien:GetName(), vector.distance(hClosestAlien:GetPos(),vPos))
+
+		----
+		local iDistanceClosestAny
+		local bClosestAnyInProtoArea
+		if (hClosestAny) then
+			AILog("Closest of any type: %s", hClosestAny:GetName())
+			iDistanceClosestAny = vector.distance(hClosestAny:GetPos(), vPos)
+			bClosestAnyInProtoArea = (vector.distance(hClosestAny:GetPos(), vProto) < (iProtoRange * 1.25))
+		end
+
+		----
+		local function fCheckProtoArea()
+
+			AILog("In proto area, checking for enemies!")
+			local aProtoEnemies = GetEntities(ENTITY_PLAYER, nil, function(hPlayer)
+
+				local vPlayer = vector.modifyz(hPlayer:GetPos(), 0.5)
+				if (hPlayer.id == g_localActorId) then
+					return false
+				end
+
+				if (Bot:IsTarget_SameTeam(hPlayer)) then
+					AILog("same team? %s", hPlayer:GetName())
+					return false
+				end
+
+				local iDist = vector.distance(hPlayer:GetPos(), vPos)
+				if (iDist > iProtoRange) then
+					AILog("%f>>%f",iDist,iProtoRange)
+					return false
+				end
+
+				if (not Pathfinding:IsEntityReachable(hPlayer)) then
+					AILog("out of reach")
+					return false
+				end
+
+				if (not Pathfinding:IsEntityOnNode(hPlayer, 35) and not Pathfinding:GetClosestVisiblePoint(vPlayer, nil, 30)) then
+					AILog("not on node or ss of reach")
+					return false
+				end
+
+				AILog("enemy spottet!!")
+				return true
+			end)
+
+			if (table.empty(aProtoEnemies)) then return end
+			if (table.count(aProtoEnemies) == 1) then return aProtoEnemies[1] end
+			table.sort(aProtoEnemies, fSORTBY_DISTANCE)
+
+			return aProtoEnemies[1]
+		end
+
+		local function fCheckProtoContestants()
+
+			local hPotential
+			if (bProtoContested) then
+				AILog("proto is contested, going there NOW.")
+				hPotential = hProto
+			elseif (hNearbyContested) then
+				AILog("proto spawn is contested!")
+				hPotential = hNearbyContested
+			elseif (hAnyContested) then
+				AILog("contested building in proto area!")
+				hPotential = hAnyContested
+			elseif (bInProtoArea) then
+				hPotential = fCheckProtoArea()
+			end
+
+			return hPotential
+		end
+
+		----
+		local hPotential, iPotentialDistance
+		local bPotentialIsPlayer
+
+		----
+		if (hCurrent) then
+			vCurrent = hCurrent:GetPos()
+			iCurrentDistance = vector.distance(vCurrent, vPos)
+			bCurrentCaptured = self:CompareTeams(self.CURRENT_ATTENTION_TARGET, g_localActor)
+			bCurrentInCaptureRadius = self:IsInCaptureRadius(self.CURRENT_ATTENTION_TARGET)
+			bCurrentContested = self:IsContested(hCurrent)
+			bCapturingAny = self:IsInCaptureRadius(hCurrent)
+			bCurrentInProtoArea = (vector.distance(vCurrent, vProto) < (iProtoRange * 1.25))
+
+			------
+			AILog("Checking current target %s", hCurrent:GetName())
+			AILog("distance = %f (any = <%f> << %f)", iCurrentDistance, iDistanceClosestAny, (iCurrentDistance / 5))
+
+			------
+			if (not bInProtoArea and ((iDistanceClosestAny < 15 or iDistanceClosestAny < (iCurrentDistance / 5)))) then
+				AILog("uncaptured building at least 5 times closer was found!")
+				return hClosestAny
+			elseif (bInProtoArea and bClosestAnyInProtoArea and not bCurrentInProtoArea and iDistanceClosestAny < 100) then
+				AILog("better building found")
+				return hClosestAny
+			end
+
+			------
+			if (bCurrentInCaptureRadius and not bCurrentCaptured) then
+
+				if (not bCurrentContested) then
+					AILog("Already at target! capturing ..")
+					return (0xBEEF)
+				end
+
+				AILog("Current is contested !!")
+				local aContestants = self:GetBuildingContestants(hCurrent)
+				if (table.size(aContestants) > 0 and timerexpired(Bot.LAST_SEEN_TIMER, 3)) then
+					AILog("going to contestant")
+
+					if (self.CURRENT_CONTESTED_TARGET) then
+						return self.CURRENT_CONTESTED_TARGET, true
+					end
+					return aContestants[1], true
+				end
+
+				AILog("failed")
 				return (0xBEEF)
-			elseif (not self:CompareTeams(self.CURRENT_ATTENTION_TARGET, g_localActor)) then
-				return self.CURRENT_ATTENTION_TARGET
+
+				------
+			else
+				if (bInProtoArea and iCurrentDistance > iProtoRange) then
+					hPotential, bPotentialIsPlayer = fCheckProtoContestants()
+					if (hPotential) then
+						AILog("proto area contested !!")
+						return hPotential, bPotentialIsPlayer
+					else
+						hPotential, bPotentialIsPlayer = fCheckProtoArea()
+						if (hPotential) then
+							AILog("found enemy in proto area !!")
+							return hPotential, bPotentialIsPlayer
+						end
+					end
+				end
+
+				------
+				if (not bCurrentCaptured) then
+					AILog("Current not captured yet !!")
+					return self.CURRENT_ATTENTION_TARGET
+				end
 			end
 		end
-		
-		---------
-		-- local hContested = GetEntity(self.CONTESTED_GO_HERE)
-		-- if (hContested) then
-			-- self:AILog(0, "going to contested building")
-			-- return hContested end
-		
-		---------
-		local bProto, hProto = self:IsBuildingCaptured("Prototype")
-		if (not bProto) then
-			local hCloseSpawn = self:GetUncapturedBuilding("spawn", hProto:GetPos(), 100)
-			if (hCloseSpawn and Pathfinding:IsEntityReachable(hCloseSpawn)) then
-				self:AILog(0, "Found uncaptured spawn near proto!")
-				return hCloseSpawn
+
+		----
+		if (hInside and not bInsideCaptured) then
+			AILog("Already inside a buildig")
+			return hInside
+		end
+
+		----
+		if (not bProtoCaptured) then
+
+			AILog("proto distance %f", iProtoDistance)
+			if (hNearbySpawn and iProtoDistance > 15) then
+				AILog("Found uncaptured spawn near proto!")
+				return hNearbySpawn
 			end
-			self:AILog(0, "Going to proto!")
+			AILog("Going to proto!")
 			
 			if (not self:CompareTeams(hProto, g_localActor)) then
 				self:SendRadio(RADIO_TAKE_PROTO) end
 
-			if (Pathfinding:IsEntityReachable(hProto)) then
-				return hProto
+			AILog("Taking proto")
+			return hProto
+
+		------
+		elseif (hNearbySpawn and Pathfinding:IsEntityReachable(hNearbySpawn)) then
+			AILog("Taking spawn near proto")
+			return hNearbySpawn
+
+		------
+		elseif (hAnyUncaptured and Pathfinding:IsEntityReachable(hAnyUncaptured)) then
+			AILog("found uncaptured building near proto, capturing now!")
+			return hAnyUncaptured
+
+		------
+		else
+
+			AILog("Proto and surrounding OK")
+
+			hPotential = fCheckProtoContestants()
+
+			if (hPotential) then
+				iPotentialDistance = vector.distance(hPotential:GetPos(), vPos)
+			end
+
+			-- no target or target far far away, check proto area
+			if (hPotential and (not bCapturingAny or (iCurrentDistance > iPotentialDistance))) then
+
+				AILog("proto area in danger and current task not worth it")
+				return hPotential
+			else
+				AILog("ignoring proto area, we're BUSY AF")
 			end
 		end
-
-		local fPred = function(hBuilding)
-
-			-- !!FIXME (im sleepy now i cant)
-			---do return true end
-
-			---Bot:SpawnDebugEffect(hBuilding:GetPos(), "ttt"..tostring(hBuilding:GetPos()))
-			return Pathfinding:IsEntityReachable(hBuilding), AILog(vector.distance(hBuilding:GetPos(),g_localActor:GetPos()))
-			--- ^ always bad for everything for some ODD REASON !
-
-		end
 		
 		---------
-		local hNextSpawn = self:GetUncapturedBuilding("spawn", hProto:GetPos(), 175, fPred)
-		if (hNextSpawn) then
-			self:AILog(0, "Found another uncaptured spawn near proto!")
-			-- self:SendRadio(RADIO_TAKE_SPAWN)
-			return hNextSpawn
-		end
-			
-		---------
-		local hNextContested = self:GetContestedBuilding(GET_ALL, vPos, 300, fPred)
-		if (hNextContested) then
-			local bGotoContested = true
-			if (bGotoContested) then
-				self:SendRadio(self:GetRadioForBuilding(hNextContested))
-				return hNextContested end end
-		
-		---------
-		local hNextUncaptured = self:GetUncapturedBuilding(GET_ALL, vPos, nil, fPred)
-		if (hNextUncaptured) then
-			self:SendRadio(self:GetRadioForBuilding(hNextUncaptured))
-			return hNextUncaptured end
-			
-		---------
-		local hRandom = self:GetRandomBuilding(self.CURRENT_ATTENTION_TARGET, fPred)
-		if (not hRandom) then
-			BotNavigation:SetSleepTimer(5)
-			return AILogWarning("No random accessible building was found !")
-		end
-
-		if (not self:CompareTeams(hRandom, g_localActor)) then
-			self:SendRadio(self:GetRadioForBuilding(hRandom)) end
-		return hRandom
+		AILog("[IMPLEMMETATION MISSING, USING ANY BUILDING]")
+		return hClosestAny
 	end,
 	
+	-----------------
+	GetBuildingContestants = function(self, hBuilding)
+
+		local iCaptureRadius = 24
+		local vPos = hBuilding:GetPos()
+
+		local aPlayers = GetEntities(ENTITY_PLAYER, nil, function(hPlayer)
+			if (hPlayer.id == g_localActorId) then
+				return false
+			end
+
+			if (Bot:IsTarget_SameTeam(hPlayer)) then
+				return false
+			end
+
+			if (hPlayer:IsDead()) then
+				return false
+			end
+
+			local iDist = vector.distance(hPlayer:GetPos(), vPos)
+			if (iDist > iCaptureRadius) then
+				return false
+			end
+
+			if (not Pathfinding:IsEntityReachable(hPlayer)) then
+				return false
+			end
+
+			if (not Pathfinding:IsEntityOnNode(hPlayer, 35)) then
+				return false
+			end
+
+			return true
+		end)
+
+
+
+		if (table.empty(aPlayers)) then return end
+		if (table.count(aPlayers) == 1) then return aPlayers end
+		table.sort(aPlayers, fSORTBY_DISTANCE)
+
+		return aPlayers
+
+	end,
+
 	-----------------
 	GetRadioForBuilding = function(self, hBuilding)
 		local sType = hBuilding.BUILDING_TYPE
@@ -1246,7 +1550,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		---------
 		local iMaxDistance = checkNumber(iMaxDistance, -1)
 		local vSource = checkVar(vSource, g_localActor:GetPos())
-			
+
 		---------
 		local aClosest = { nil, iMaxDistance }
 		for i, hBuilding in pairs(aBuildings) do
@@ -1283,9 +1587,10 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local aClosest = { nil, iMaxDistance }
 		for idBuilding, bContested in pairs(aContested) do
 			local hBuilding = GetEntity(idBuilding)
-			if (bContested) then
-				if (sType == GET_ALL or (hBuilding.BUILDING_TYPE == sType)) then
-					if (not self:CompareTeams(hBuilding, g_localActor)) then
+			if (bContested and table.count(self:GetBuildingContestants(hBuilding)) > 0) then
+				if ((sType == GET_ALL or sType == BUILDING_ANY) or (hBuilding.BUILDING_TYPE == sType)) then
+					-- ??? we want contested, regardless of team ???
+					--if (not self:CompareTeams(hBuilding, g_localActor)) then
 						local iDistance = vector.distance(vSource, hBuilding:GetPos())
 						if ((fPred == nil or fPred(hBuilding) == true) and (iMaxDistance == -1 or (aClosest[2] == -1 or iDistance < aClosest[2]))) then
 							aClosest = {
@@ -1293,7 +1598,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 								iDistance
 							}
 						end
-					end
+					--end
 				end
 			end
 		end
@@ -1304,9 +1609,9 @@ BotAI:CreateAIModule("PowerStruggle", {
 	
 	-----------------
 	GetBuildingsOfType = function(self, sType)
-		self:AILog(0, "%s.GetBuildingsOfType()", self.ModuleFullName)
+		self:AILog(0, "%s.GetBuildingsOfType(%s)", self.ModuleFullName, tostring(sType))
 		
-		if (sType == GET_ALL) then
+		if (sType == GET_ALL or sType == BUILDING_ANY) then
 			local aAll = {}
 			for sBuildingType, aBuildings in pairs(self.BUILDINGS) do
 				table.append(aAll, aBuildings) end

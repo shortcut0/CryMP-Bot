@@ -304,17 +304,29 @@ BotNavigation.Update = function(self)
 	----------------
 	-- GetLastJump Might cause future problems!
 	local iGoalDist = 2
-	if (hCurrentNode and System.IsPointIndoors(hCurrentNode)) then
-		self:Log(5, "POINT INDOORS. HIGH PRECISION GOAL DISTANCE!")
-		iGoalDist = 0.5 end
-	
-	if (not timerexpired(self.CURRENT_PATH_NODE_STUCK_TIME, 1)) then
-		iGoalDist = 0.1
+	local bDriving = Bot:IsDriving()
+	local hVehicle = Bot:GetVehicle()
+	if (bDriving) then
+		iGoalDist = 4
+
+		-- FIXME: EXPERIMENTAL !!
+		local vCenter = vector.modifyz(hVehicle:GetCenterOfMassPos(), 0.1)
+		local vDir_Vehicle = hVehicle:GetDirectionVector()
+
+		vPos = vector.add(vCenter, vector.scale(vDir_Vehicle, 5))
+		--Pathfinding:Effect(vPos, 0.2)
+	else
 		if (hCurrentNode and System.IsPointIndoors(hCurrentNode)) then
-			Bot:SetCameraTarget(hCurrentNode) end
-	elseif (not bReverted and (self:IsLastNode(self.CURRENT_PATH_NODE) or (self:IsFirstNode(self.CURRENT_PATH_NODE) and self:IsNodeVisible(self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_NODE])))) then
-		iGoalDist = 1.85 end
-		
+			self:Log(5, "POINT INDOORS. HIGH PRECISION GOAL DISTANCE!")
+			iGoalDist = 0.5 end
+
+		if (not timerexpired(self.CURRENT_PATH_NODE_STUCK_TIME, 1)) then
+			iGoalDist = 0.1
+			if (hCurrentNode and System.IsPointIndoors(hCurrentNode)) then
+				Bot:SetCameraTarget(hCurrentNode) end
+		elseif (not bReverted and (self:IsLastNode(self.CURRENT_PATH_NODE) or (self:IsFirstNode(self.CURRENT_PATH_NODE) and self:IsNodeVisible(self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_NODE])))) then
+			iGoalDist = 1.85 end
+	end
 	----------------
 	Bot.GOAL_REACHED_DISTANCE = iGoalDist
 	Bot.CURRENT_PATH_NODES = self.CURRENT_PATH_SIZE
@@ -340,7 +352,7 @@ BotNavigation.Update = function(self)
 	
 	----------------
 	local bAdvancedPath = false
-	local vPos = g_localActor:GetPos()
+	--local vPos = g_localActor:GetPos()
 	local iClosest, vClosest = self:GetClosestNodeOnPath(vPos)
 	if (hCurrentNode and iClosest and iClosest > self.CURRENT_PATH_NODE and vector.distance(vClosest, vPos) < vector.distance(hCurrentNode, vPos)) then
 		if (self:IsNodeVisibleEx(vClosest)) then
@@ -385,7 +397,7 @@ BotNavigation.Update = function(self)
 	elseif (not bReverted and self.CURRENT_PATH_WAS_REVERTED) then
 		if (not Bot:IsIndoors() and self:IsNodeVisibleEx(self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_PREVIOUS_NODE])) then
 			bUpdate = true
-			sUpdate = "Previus Reverted node is now visible!!"
+			sUpdate = "Previous Reverted node is now visible!!"
 		
 		end
 	end
@@ -414,6 +426,13 @@ BotNavigation.Update = function(self)
 		self:Log(3, "Traveling to current path node: %d (pos: %s, distance: %f)", self.CURRENT_PATH_NODE, Vec2Str(hCurrentNode), vector.distance(g_localActor:GetPos(), hCurrentNode))
 		Bot.PATHFINDING_FINALPATH_POS = self.CURRENT_PATH_ARRAY[table.count(self.CURRENT_PATH_ARRAY)]
 		Bot:StartMoving(1, hCurrentNode, true)
+
+		-- tunnel check
+		if (System.IsPointIndoors(vPos) and not System.IsPointIndoors(hCurrentNode) and not Bot:IsUnderground(hCurrentNode, 3)and not Bot:IsUnderground(vPos, 3)) then
+			self.LEAVE_INDOORS_TIMER = timerinit()
+			NaviLog("current is INDOORS")
+		end
+
 		-- Particle.SpawnEffect("explosions.flare.a", hCurrentNode, g_Vectors.up, 0.1)
 	else
 		self:LogWarning(0, "Failed to retrive current pathnode (id: %d) path probably ended", self.CURRENT_PATH_NODE)
@@ -544,9 +563,31 @@ BotNavigation.CanCircleJumpOnCurrentPath = function(self)
 end
 
 ---------------------------
+-- IsCurrentNodeIndoors
+
+BotNavigation.IsCurrentNodeIndoors = function(self, bIgnoreUnderground)
+
+	-----------
+	if (not isArray(self.CURRENT_PATH_ARRAY)) then
+		return end
+
+	-----------
+	local vCurrent = self:GetCurrentNodePos(self.CURRENT_PATH_NODE)
+	if (vCurrent) then
+		local bIndoors = System.IsPointIndoors(vCurrent)
+		if (not bIgnoreUnderground) then
+			return bIndoors
+		end
+		return (not Bot:IsUnderground(vector.modifyz(vCurrent, 0.25)))
+	end
+
+	return
+end
+
+---------------------------
 -- GetNodeCountToIndoors
 
-BotNavigation.GetNodeCountToIndoors = function(self)
+BotNavigation.GetNodeCountToIndoors = function(self, bIgnoreUnderground)
 
 	-----------
 	if (not isArray(self.CURRENT_PATH_ARRAY)) then
@@ -562,11 +603,12 @@ BotNavigation.GetNodeCountToIndoors = function(self)
 	local bIndoorsFound = false
 	for iNode = self.CURRENT_PATH_NODE, self.CURRENT_PATH_SIZE, 1 do
 		local vNode = self:GetCurrentNodePos(iNode)
-		if (vNode) then
+		if (vNode and (not bIgnoreUnderground or not Bot:IsUnderground(vNode, -1))) then
 			if (self:IsNodeIndoors(iNode) or System.IsPointIndoors(vNode)) then
 				bIndoorsFound = true
-				break else
-					iCounter = iCounter + 1 end
+				break
+			else
+				iCounter = iCounter + 1 end
 		end
 	end
 	
@@ -816,13 +858,14 @@ BotNavigation.IsFirstNode = function(self, iNode)
 -- IsLastNode
 
 BotNavigation.IsLastNode = function(self, iNode)
-	
+
 		-----------
-		if (not iNode or not self.CURRENT_PATH_SIZE) then
+		local iSize = self.CURRENT_PATH_SIZE
+		if (not iNode or not iSize) then
 			return false end
 	
 		-----------
-		if (iNode >= self.CURRENT_PATH_SIZE) then
+		if (iNode >= iSize) then
 			return true end
 			
 		-----------
@@ -831,7 +874,7 @@ BotNavigation.IsLastNode = function(self, iNode)
 			local vEndNode = self.CURRENT_PATH_ARRAY[iNode]
 			local vCurrNode = self.CURRENT_PATH_ARRAY[(iNode - 1)]
 			
-			return (iNode >= self.CURRENT_PATH_SIZE and (((vector.distance(vCurrNode, vEndNode) < 0.5) or self:IsNodeVisible_Source(vEndNode, vCurrNode))))
+			return (iNode >= iSize and (((vector.distance(vCurrNode, vEndNode) < 0.5) or self:IsNodeVisible_Source(vEndNode, vCurrNode))))
 		end
 		
 		-----------
@@ -839,10 +882,10 @@ BotNavigation.IsLastNode = function(self, iNode)
 			
 		-----------
 		local vPos = g_localActor:GetPos()
-		local vEnd = self.CURRENT_PATH_ARRAY[self.CURRENT_PATH_ARRAY]
+		local vEnd = self.CURRENT_PATH_ARRAY[iSize]
 		if (vEnd) then
 			local iDistance = vector.distance(vPos, vEnd)
-			return (iDistance < 0.5 or (iDistance < 2.25 and self:IsNodeVisible_Source(vEndNode, vCurrNode)))
+			return (iDistance < 0.5 or (iDistance < 2.25 and self:IsNodeVisible_Source(vEnd, vPos)))
 		end
 		
 		-----------
@@ -1400,6 +1443,13 @@ BotNavigation.ResetPathData = function(self)
 		self.CURRENT_NODE_LASTDISTANCE = nil
 		self.CURRENT_PATH_INDOOR_NODES = nil
 	end
+
+---------------------------
+-- GetPathGoal
+
+BotNavigation.GetPathGoal = function(self)
+	return (self.CURRENT_PATH_GOAL)
+end
 
 ---------------------------
 -- GetRandomEntitiesForEnvironment

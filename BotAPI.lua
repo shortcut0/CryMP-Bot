@@ -146,6 +146,11 @@ BotAPI.Events.OnUpdate = function(self, frameTime) -- on frame
 	end
 
 	-----------
+	if (not BOT_INITIALIZED) then
+		return
+	end
+
+	-----------
 	local bOk, sErr = pcall(self.DoUpdate, self)
 	if (not bOk) then
 		SetError("Error in DoUpdate", sErr)

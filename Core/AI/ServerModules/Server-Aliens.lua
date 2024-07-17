@@ -36,7 +36,7 @@ BotAI:CreateServerModule(SERVER_ADDR_ALIEN, SERVER_PORT_ANY, {
 
                         for i, hHunter in pairs(aHunters) do
                             local iHP = checkNumber(hHunter.actor:GetHealth(), 0)
-                            if (iHP > 0 and vector.distance(vPos, hHunter:GetPos()) < 75) then
+                            if (iHP > 0 and vector.distance(vPos, hHunter:GetPos()) < 125) then
                                 bPause = true
                             end
                         end

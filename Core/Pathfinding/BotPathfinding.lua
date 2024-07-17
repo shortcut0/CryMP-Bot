@@ -128,6 +128,7 @@ Pathfinding.InitCVars = function()
 		{ "test7",       		"Pathfinding:Test7()",   				"Tests the Pathfinding System" },
 		{ "test8",       		"Pathfinding:Test8(%%)",   				"Tests the Pathfinding System" },
 		{ "test9",       		"Pathfinding:Test9(%%)",   				"Tests the Pathfinding System" },
+		{ "test10",       		"Pathfinding:Test10()",   				"Tests the Pathfinding System" },
 		{ "test_live",  		"Pathfinding:LivePathfindingTest(%1)", 	"Tests the Pathfinding System with real time tests" },
 
 		---------------
@@ -267,6 +268,7 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 		fBotRayCheck_C = GetDummyFunc() end
 
 	------------
+	self.VALIDATION_FUNC_DEBUG = false
 	self.VALIDATION_FUNC = function(vSrc, vTgt, iP2, iP3)
 
 		local iDist = vector.distance(vSrc, vTgt)
@@ -304,20 +306,83 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 				end
 			end
 			bRHOk = (((iHits == 0) and not bHitEntity))
+			--PathFindLog("RH-OK %s (%d)", tostring(bRHOk), iHits)
 		end
 
 		--PathFindLog("->%f",iDist)
 
+		----------------------------
+		-- !! AND
+		local bOk = true
+		if (not bRHOk) then
+			--PathFindLog("bRHOk and BAD")
+			bOk = false
+		end
+		-- ++
+		if (not fRayCheck_P(vSrc_Back, vTgt_Back, iP2, iP3)) then
+			--PathFindLog("fRayCheck_P and BAD")
+			if (bOk and not fRayCheck_P(
+					vector.modifyz(vSrc_Back, 0.5),
+					vector.modifyz(vTgt_Back, 0.5),
+				iP2, iP3)
+			) then
+				--PathFindLog("Second check FAILED !")
+				bOk = false
+			end
+		end
+
+		if (not bOk) then
+			return false
+		end
+
+
+		----------------------------
+		-- !! OR
+		if ((iDist < 3 and fBotRayCheck_C(vSrc_Back, vTgt_Back, iP2, iP3))) then
+			bOk = true
+		end
+		-- ||
+		if (fRayCheck_P(vector.modify(vSrc_Back, "z", 0.15, true), vector.modify(vTgt_Back, "z", 0.15, true), iP2, iP3)) then
+			bOk = true
+		end
+		-- ||
+		if (fRayCheck_P(vSrc_Back, vector.modify(vTgt_Back, "z", 0.25, true), iP2, iP3)) then
+			bOk = true
+		end
+		-- ||
+		if (fRayCheck_P(vector.modify(vSrc_Back, "z", 0.25, true), vTgt_Back, iP2, iP3)) then
+			bOk = true
+		end
+		-- ||
+		if (fRayCheck_P(vector.modify(vSrc_Back, "z", 0.25, true), vector.modify(vTgt_Back, "z", 0.25, true), iP2, iP3)) then
+			bOk = true
+		end
+
+		--[[
 		local bVisible =
 			((iDist < 3 and fBotRayCheck_C(vSrc_Back, vTgt_Back, iP2, iP3)) or
+
 			fRayCheck_P(vector.modify(vSrc_Back, "z", 0.15, true), vector.modify(vTgt_Back, "z", 0.15, true), iP2, iP3) or
 			fRayCheck_P(vSrc_Back, vector.modify(vTgt_Back, "z", 0.25, true), iP2, iP3) or
 			fRayCheck_P(vector.modify(vSrc_Back, "z", 0.25, true), vTgt_Back, iP2, iP3) or
-			fRayCheck_P(vector.modify(vSrc_Back, "z", 0.25, true), vector.modify(vTgt_Back, "z", 0.25, true), iP2, iP3)) and
-			fRayCheck_P(vSrc_Back, vTgt_Back, iP2, iP3) and
-					bRHOk
+			fRayCheck_P(vector.modify(vSrc_Back, "z", 0.25, true), vector.modify(vTgt_Back, "z", 0.25, true), iP2, iP3))
+
+					-- !! ANY ABOVE AND These
+					and fRayCheck_P(vSrc_Back, vTgt_Back, iP2, iP3)
+					and bRHOk
 
 		return ( bVisible )
+		]]
+
+		if (not bOk) then
+
+			if (self.VALIDATION_FUNC_DEBUG) then
+				PathFindLong("All ORs FAILED")
+			end
+		end
+
+		self.VALIDATION_FUNC_DEBUG = false
+		return bOk
 	end
 
 	------------
@@ -343,7 +408,7 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 		iNodes = iNodes + 1
 
 		------------
-		local aConnections, aPanicLinks = self:GenerateLinks(i, self.NODE_MAX_DIST, self.NODE_MAX_DIST_PANIC)
+		local aConnections, aPanicLinks = self:GenerateLinks(i, self.NODE_MAX_DIST, (self.NODE_MAX_DIST_PANIC), (self.NODE_MAX_DIST_PANIC))
 		local aLinks = aConnections
 		if (table.count(aConnections) == 0) then
 			self:Effect(pos)
@@ -351,6 +416,7 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 			--aConnections = self:GenerateLinks(i, self.NODE_MAX_DIST_PANIC)
 			if (table.count(aPanicLinks) == 0) then
 				PathFindLog("$6PANIC: Node %d had no links", i)
+				self:Effect(pos)
 			end
 		end
 
@@ -511,7 +577,8 @@ Pathfinding.PaintUnlinkedNodes = function(self)
 	for i, aNode in pairs(aNavmesh) do
 		local vNode = aNode.pos
 		if (table.count(aNode.links) == 0) then
-			self:Effect(vNode)
+			PathFindLog("Node %d (%s)", i, vector.tostring(vNode))
+			self:Effect(vNode, 1)
 		end
 	end
 end
@@ -794,6 +861,7 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance, fPanicDistance
 
 	-----------------------
 	local fRayCheck = self.VALIDATION_FUNC
+	local bInDoors = Bot:IsIndoors(vSource)
 
 	-----------------------
 	local aConnections = {}
@@ -808,20 +876,38 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance, fPanicDistance
 			if (bForcedLink) then
 				aConnections[iTarget] = true
 			else
-				if ((self:CheckNodesElevation(vSource, vTarget))) then
+				local iDistance = vector.distance(vSource, vTarget)
+				local bOk = (iDistance < fMaxDistance)
+				local bPanic = (not bOk and iDistance < fPanicDistance)
 
-					local iDistance = vector.distance(vSource, vTarget)
-					local bOk = (iDistance < fMaxDistance)
-					local bPanic = (not bOk and iDistance < fPanicDistance)
-					if (bOk or bPanic) then
 
+				if (bOk or bPanic) then
+
+					local bElevation = self:CheckNodesElevation(vSource, vTarget)
+					local bIgnoreElevation = ( true
+						and (iDistance > 1) -- !!FIXME: experimental: so we dont try to climb objects??
+						and (not bInDoors)
+						and (self:CheckNodeCollisions(vSource, vTarget) == 0)
+						and (not bPanic)
+						and (self:CheckNodesElevation(vSource, vTarget, 1.5)) -- !!FIXME: global for 1.5 (PATH_MAX_Z_DIFF ??)
+						and (self:IsPointOnTerrain(vSource))
+					)
+
+					--if (not bElevation) then
+					--	PathFindLog("elevation bad")
+					--	if (bIgnoreElevation) then
+					--		PathFindLog("fixed BAD BAD link :o")
+					--	end
+					--end
+
+					if ((bElevation or bIgnoreElevation)) then
 						local bUnderwater = Bot:IsUnderwater(vTarget)
 						local bCanSee = false
 						if (not bCanSee) then
 							if (bUnderwater) then
 								bCanSee = self.VALIDATION_FUNC(vSource, vTarget, NULL_ENTITY, NULL_ENTITY)
 							else
-								bCanSee = fRayCheck(vector.modify(vSource, "z", 0.25, true), vector.modify(vTarget, "z", 0.25, true), NULL_ENTITY, NULL_ENTITY)
+								bCanSee = fRayCheck(vector.modifyz(vSource, 0.25), vector.modifyz(vTarget, 0.25), NULL_ENTITY, NULL_ENTITY)
 							end
 						end
 						if (bCanSee) then
@@ -838,6 +924,7 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance, fPanicDistance
 							end
 						end
 					end
+				else
 				end
 			end
 		end
@@ -862,6 +949,30 @@ Pathfinding.GetBakedLinks = function(self, iSourceNode)
 		return aBaked end
 
 	return
+end
+
+---------------------------
+-- CheckNodesElevation
+
+Pathfinding.IsPointOnTerrain = function(self, vNode)
+
+	local vDir = vector.make(0, 0, -1)
+	local iDist = 1.0
+
+	local iHits = Physics.RayWorldIntersection(vector.modifyz(vNode, 0.15), vDir, iDist, ent_terrain + ent_static, NULL_ENTITY, nil, g_HitTable)
+	if (iHits == 0) then
+		return false
+	end
+
+	local bOk = true
+	for i = 1, iHits do
+		if (g_HitTable[i].renderNode) then
+			--PathFindLog("render node detected :ss")
+			bOk = false
+		end
+	end
+
+	return bOk
 end
 
 ---------------------------
@@ -1223,12 +1334,16 @@ Pathfinding.Test7 = function(self)
 		Particle.SpawnEffect("explosions.flare.a", self.TEST_POS_1, g_Vectors.up, 0.1)
 		Particle.SpawnEffect("explosions.flare.a", self.TEST_POS_3, g_Vectors.up, 0.1)
 		PathFindLog("Position 1 Set.")
+		PathFindLog("%s", table.tostring(self.TEST_POS_3))
+		PathFindLog("%s", table.tostring(self.TEST_POS_1))
 	elseif (not self.TEST_POS_2) then
 		self.TEST_POS_2 = g_localActor:GetPos()
 		self.TEST_POS_4 = self:GetClosestPoint(self.TEST_POS_2)
 		Particle.SpawnEffect("explosions.flare.a", self.TEST_POS_2, g_Vectors.up, 0.1)
 		Particle.SpawnEffect("explosions.flare.a", self.TEST_POS_4, g_Vectors.up, 0.1)
 		PathFindLog("Position 2 Set.")
+		PathFindLog("%s", table.tostring(self.TEST_POS_4))
+		PathFindLog("%s", table.tostring(self.TEST_POS_2))
 	else
 
 		local bOk = self.VALIDATION_FUNC(self.TEST_POS_1, self.TEST_POS_2, NULL_ENTITY, NULL_ENTITY)
@@ -1259,13 +1374,53 @@ Pathfinding.CheckNodeCollisions = function(self, vNode1, vNode2)
 	--PathFindLog("vNode 1 = %s, vNode 2 = %s",
 	--vector.tostring(vNode1), vector.tostring(vNode2))
 
-	local vDir = vector.getdir(vNode1, vNode2, true, -1)
-	local iDistance = math.limit(vector.distance(vNode1, vNode2) + 0.25, 1, BOT_RAYWORLD_MAXDIST)
-	local iHits = Physics.RayWorldIntersection(vNode1, vector.scale(vDir, iDistance), iDistance, ent_all - ent_living - ent_rigid, g_localActorId, nil, g_HitTable)
+	--PathFindLog(table.tostring(vector))
+
+	local aIgnoreFiles = {
+		".*speedbump.*"
+	}
+
+	local vPos_Source = vector.modify(vNode1, "z", 0.25, true)
+	local vPos_Target = vector.modify(vNode2, "z", 0.25, true)
+	local vDir = vector.getdir(vPos_Source, vPos_Target, true, -1)
+	local iDistance = math.limit(vector.distance(vPos_Source, vPos_Target) + 0.25, 1, BOT_RAYWORLD_MAXDIST)
+
+	local iHits = Physics.RayWorldIntersection(vPos_Source, vector.scale(vDir, iDistance), iDistance, ent_all - ent_living - ent_rigid, g_localActorId, nil, g_HitTable)
+	local bIgnoreCollisions = false
+	if (iHits > 0) then
+		for i = 1, iHits do
+			local aHit = g_HitTable[i]
+
+			-- renderNode  [X] foliage entity id
+			-- foliage     [B]
+
+			-- renderNode  [X] static entity id
+			-- static_ent  [B]
+			-- static_class[S]
+			-- static_name [S]
+			-- static_pos  [V]
+			-- static_char [S]
+
+			if (aHit) then
+				local sChar = (aHit.static_char or aHit.static_name)
+				if (string.matchex(sChar, unpack(aIgnoreFiles))) then
+					bIgnoreCollisions = true
+					PathFindLog("ITS A GOD DAMN SPEEDBUMP!!")
+				else
+					bIgnoreCollisions = false
+					break
+				end
+			end
+		end
+	end
+
 
 	--CryAction.PersistantArrow(vNode1, 1, vDir, vDir, "arrow_", 30)
 	--Particle.SpawnEffect("explosions.flare.a", vNode1, g_Vectors.up, 0.25)
 
+	if (bIgnoreCollisions) then
+		return 0 -- hack
+	end
 	return (iHits)
 end
 
@@ -1307,6 +1462,14 @@ Pathfinding.Test9 = function(self, iThreshold)
 		end
 	end
 
+end
+
+---------------------------------------------
+-- Pathfinding.Test8
+
+Pathfinding.Test10 = function(self)
+
+	PathFindLog("Standing on terrain %s", string.bool(self:IsPointOnTerrain(g_localActor:GetPos())))
 end
 
 ---------------------------------------------
@@ -1580,6 +1743,22 @@ Pathfinding.IsEntityReachable = function(self, hEntity)
 end
 
 ---------------------------------------------
+-- Pathfinding.IsEntityOnNode
+
+Pathfinding.IsEntityOnNode = function(self, hEntity, iDistanceMult)
+
+	local vPos = g_localActor:GetPos()
+	local vEntity = vector.modifyz(hEntity:GetPos(), 1)
+
+	local vClosest, iClosest = self:GetClosestVisiblePoint(vEntity, nil, (self.NODE_MAX_DIST * checkNumber(iDistanceMult, 1)))
+	if (not vClosest) then
+		return false
+	end
+
+	return true
+end
+
+---------------------------------------------
 -- Pathfinding.Validate
 
 Pathfinding.Validate = function(aPath)
@@ -1627,9 +1806,9 @@ end
 ---------------------------------------------
 -- Pathfinding.GetClosestVisiblePoint
 
-Pathfinding.GetClosestVisiblePoint = function(self, vSource, pred)
+Pathfinding.GetClosestVisiblePoint = function(self, vSource, pred, iMaxDist)
 
-	local aClosest = { nil, nil, -1 }
+	local aClosest = { nil, nil, checkNumber(iMaxDist, -1) }
 
 	-----------------
 	for i, v in pairs(self.VALIDATED_NAVMESH) do
@@ -2222,6 +2401,9 @@ Pathfinding.RecordPlayerMovement = function(self, aActor)
 	local bElevationChanged = (not self:CompareNodeZHeight(vPos, aActor.LAST_WORLD_POSITION))
 	if (not bCanInsert) then
 		bCanInsert = bElevationChanged
+		if (bElevationChanged) then
+			PathFindLog("bElevationChanged!!")
+		end
 		bCanInsert = bCanInsert and not Pathfinding.IsNodesInRadius(vPos, self.RECORD_INSERT_DIST, self.RECORDED_NAVMESH, 0.15)
 	end
 
@@ -2461,7 +2643,7 @@ Pathfinding.CompareNodeElevation = function(self, vNode, iThreshold, vOldNode)
 	local iElevationDiff = (vOldNode.z - vNode.z)
 
 	----------------
-	-- PathFindLog(iElevationDiff)
+	 PathFindLog(iElevationDiff)
 	if (iElevationDiff > iThreshold) then
 		return false elseif (iElevationDiff < -iThreshold) then
 			return false end

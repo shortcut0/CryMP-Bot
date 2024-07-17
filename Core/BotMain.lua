@@ -66,6 +66,7 @@ BOT_SMOOTHEN_MOVEMENT = true
 BOT_CAMERA_RELEASE = 0x1
 BOT_CAMERA_WALLJUMP = 0x2
 BOT_CAMERASPEED_AUTO = 0x1
+BOT_CAMERASPEED_INSTANT = -1
 
 BOT_DEBUG_MODE = true
 BOT_ENABLED = 1
@@ -73,6 +74,7 @@ BOT_USE_ANGLES = 1
 BOT_VIEW_ANGLES = 180
 BOT_HOSITLITY = 1
 BOT_MOVEMENT = 1
+BOT_WEAPONHANDLING = 1
 BOT_CAN_WALLJUMP = true
 BOT_BLOCK_WEAPONS = 0
 BOT_ADJUST_AIM = 0
@@ -108,12 +110,29 @@ WEAPON_SOCOM = "SOCOM"
 WEAPON_HURRICANE = "Hurricane"
 WEAPON_ALIEN = "AlienMount"
 WEAPON_RPG = "LAW"
+WEAPON_FISTS = "Fists"
+
+------------------------------
+
+ENTITY_AVMINE = "AVMine"
+ENTITY_CLAYMORE = "Claymore"
+ENTITY_FRAG = "Grenade" -- ??
+ENTITY_FLYING_FRAG = "explosivegrenade" -- Projectiles
+
+------------------------------
+
+BONE_HEAD = "Bip01 head"
+BONE_PELVIS = "Bip01 pelvis"
 
 ------------------------------
 
 VEHICLE_CIV = "Civ_car1"
-VEHICLE_USLtv = "US_ltv"
-VEHICLE_NKLtv = "NK_ltv"
+VEHICLE_USLTV = "US_ltv"
+VEHICLE_NKLTV = "NK_ltv"
+VEHICLE_LTV = ".*_ltv$"
+VEHICLE_TANK = ".*_?tank$"
+VEHICLE_APC = ".*_?apc$"
+VEHICLE_TANKS = { VEHICLE_TANK, VEHICLE_APC }
 
 ------------------------------
 NANOMODE_NULL = -1
@@ -141,12 +160,18 @@ KEY_V_FORWARD = "v_moveforward"
 KEY_V_BACKWARD = "v_moveback"
 KEY_V_LEFT = "v_turnleft"
 KEY_V_RIGHT = "v_turnright"
+KEY_V_ROTATEYAW = "v_rotateyaw"
+KEY_V_ROTATEPITCH = "v_rotatepitch"
+
+KEY_VEHICLE_BRAKE = "v_brake"
+KEY_VEHICLE_BOOST = "v_boost"
 
 KEY_SPRINT = "sprint"
 KEY_JUMP = "jump"
 KEY_ATTACK = "attack1"
 KEY_MELEE = "special"
 KEY_RELOAD = "reload"
+KEY_INTERACT = "use"
 
 KEY_CROUCH = "crouch"
 KEY_PRONE = "prone"
@@ -165,6 +190,15 @@ eCVar_StancesSimpleEx = 2 -- Can't fail
 
 eWallJumpType_Pos = 0
 eWallJumpType_Vel = 1
+
+eVehicleType_Other = ""
+eVehicleType_Land = "land"
+eVehicleType_Air = "air"
+
+eDirection_Right = inc(1, "*2")
+eDirection_Left = inc()
+eDirection_Front = inc()
+eDirection_Back = incEnd()
 
 ------------------------------
 Bot = {}
@@ -232,6 +266,7 @@ eMovInterrupt_None = inc(0, 1)
 eMovInterrupt_Beef = inc()
 eMovInterrupt_DoorPause = inc()
 eMovInterrupt_DangerOutside = inc()
+eMovInterrupt_FindUber = inc()
 eMovInterrupt_End = incEnd()
 
 Bot.MOVEMENT_INTERRUPTED = eMovInterrupt_None
@@ -253,19 +288,21 @@ Bot.Init = function(self)
 	end
 
 	------------------------------------
-	bOk, sErr = pcall(Pathfinding.Init, Pathfinding)
-	if (not bOk) then
-		return false, SetError("Failed to Initialize Pathfinding System", sErr), BotError() end
+	if (not BOT_KEEP_CORE) then
+		bOk, sErr = pcall(Pathfinding.Init, Pathfinding)
+		if (not bOk) then
+			return false, SetError("Failed to Initialize Pathfinding System", sErr), BotError() end
 
-	------------------------------------
-	bOk, sErr = pcall(BotNavigation.Init, BotNavigation)
-	if (not bOk) then
-		return false, SetError("Failed to Initialize Navigation System", sErr), BotError() end
+		------------------------------------
+		bOk, sErr = pcall(BotNavigation.Init, BotNavigation)
+		if (not bOk) then
+			return false, SetError("Failed to Initialize Navigation System", sErr), BotError() end
 
-	------------------------------------
-	bOk, sErr = pcall(BotAI.Init, BotAI)
-	if (not bOk) then
-		return false, SetError("Failed to Initialize AI System", sErr), BotError() end
+		------------------------------------
+		bOk, sErr = pcall(BotAI.Init, BotAI)
+		if (not bOk) then
+			return false, SetError("Failed to Initialize AI System", sErr), BotError() end
+	end
 
 	------------------------------------
 	self:PatchGameRules()
@@ -343,7 +380,9 @@ Bot.InitCommands = function(self, aList)
 	local sPrefix = "BOT_"
 	local aCommands = checkVar(aList, {
 		{ "test", 					"test_description", 	"BotLog('Function-Called')" },
+		{ "exec", 					"test_description", 	"loadstring(%%)" },
 		{ "reload", 				"test_description", 	"Bot:Reload()" },
+		{ "reloadonly", 			"test_description", 	"Bot:Reload(nil,1)" },
 		{ "enable_frame_logging", 	"test_description", 	[[Bot:EnableFrameLogging()]] },
 	})
 	local iCVars = table.count(aCommands)
@@ -466,14 +505,16 @@ Bot.LoadLibraries = function(self)
 	if (not self:LoadUtilities()) then
 		return false end
 
-	if (not self:LoadPathfinding()) then
-		return false end
+	if (not BOT_KEEP_CORE) then
+		if (not self:LoadPathfinding()) then
+			return false end
 
-	if (not self:LoadNavigation()) then
-		return false end
+		if (not self:LoadNavigation()) then
+			return false end
 
-	if (not self:LoadAISystem()) then
-		return false end
+		if (not self:LoadAISystem()) then
+			return false end
+	end
 
 	BotLog("All Libraries loaded")
 
@@ -560,13 +601,17 @@ end
 
 ------------------------------
 --- Init
-Bot.Reload = function(self, bClearData)
+Bot.Reload = function(self, bClearData, bKeepCore)
 	BotMainLog(0, "Reloading file ... ");
 
 	if (clearData) then
 		Bot = nil
 	end
 
+	if (bKeepCore) then
+		SYSTEM_INTERRUPTED = false
+		BOT_KEEP_CORE = true
+	end
 	BOT_RELOADING = true
 
 	if (not BotMain) then
@@ -575,6 +620,8 @@ Bot.Reload = function(self, bClearData)
 
 	BotMain:LoadConfigFile()
 	BotMain:LoadBotCore()
+
+	BOT_KEEP_CORE = nil
 end
 
 ------------------------------
@@ -959,6 +1006,11 @@ Bot.SetWallJump = function(self, iNode)
 	self.WALLJUMPING_START = timerinit()
 	self.WALLJUMPING_UPDATERATE = (System.GetFrameTime() * 0.005 )
 	self.WALLJUMPING_LAST_MOVE = nil
+
+    local hFists = self:GetItem(WEAPON_FISTS)
+    if (hFists) then
+        hFists.weapon:RequestWeaponRaised(true) -- Send Walljump Request to server
+    end
 
 	BotMainLog("new jump set")
 end
@@ -1450,6 +1502,416 @@ end
 
 ------------------------------
 --- Init
+Bot.EnterVehicle = function(self, hVehicle)
+	if (not hVehicle) then
+		return
+	end
+
+	hVehicle.vehicle:OnUsed(g_localActorId, 1100 + 1)
+end
+
+------------------------------
+--- Init
+Bot.LeaveVehicle = function(self)
+
+	local hVehicle = self:GetVehicle()
+	local iSeat = self:GetSeatId()
+	if (hVehicle) then
+		hVehicle.STUCK_TRIED_BACKUP = nil
+		hVehicle.STUCK_TRIED_BOOST = nil
+		hVehicle.EXIT_TIMER = timerinit()
+		hVehicle.vehicle:OnUsed(g_localActor.id, (1100 + iSeat))
+		Game.UseVehicle(hVehicle.id, g_localActor.id, (1100 + iSeat))
+		BotMainLog("We're on seat" ..iSeat)
+	end
+
+	--for i = 1, 1400 do
+	--	hVehicle.vehicle:OnUsed(g_localActor.id, -1)
+	--end
+
+	BotMainLog(tracebackEx())
+	BotMainLog("Leaving vehicle NOW")
+	self:PressKey(KEY_INTERACT, 0.1)
+end
+
+------------------------------
+--- Init
+Bot.GetSeatId = function(self)
+
+	local iSeat = 0
+	local hVehicle = self:GetVehicle()
+	if (not hVehicle) then
+		return iSeat
+	end
+
+	for i, aSeat in pairs(hVehicle.Seats) do
+		if (aSeat:GetPassengerId() == g_localActorId) then
+			return (aSeat.seatId)
+		end
+	end
+
+	return iSeat
+end
+
+------------------------------
+--- Init
+Bot.IsDriving = function(self)
+	return (self.DRIVING_VEHICLE)
+end
+
+------------------------------
+--- Init
+Bot.IsDriver = function(self)
+	return (self.DRIVING_VEHICLE_ISDRIVER)
+end
+
+------------------------------
+--- Init
+Bot.UpdateVehicleShooting = function(self)
+
+	local hTarget = self:GetTarget()
+	local hVehicle = self:GetVehicle()
+
+	if (not hTarget) then
+		return
+	else
+		local hCurrent = (hTarget.inventory:GetCurrentItem())
+		if (hCurrent and hCurrent.class == WEAPON_RPG) then
+			return self:LeaveVehicle()
+		end
+	end
+
+	if (not hVehicle) then
+		return
+	end
+
+	-- !!FIXME: enable after finding proper method to update vehicle cam dir
+	--do return false end
+
+	local aWeapons = self:GetVehicleWeapons(hVehicle)
+	if (not isArray(aWeapons)) then
+		return
+	end
+	--if (not self:IsDriver(hVehicle)) then
+	--	return
+	--end
+
+	local vCamPos = self:GetViewCameraPos()
+	local vCamDir = self:GetViewCameraDir()
+
+	local vTarget = hTarget:GetPos()
+	local vTargetPos = hTarget:GetPos()
+	local vTargetDir = vector.getdir(vCamPos, vTargetPos, 1, -1)
+
+	local iWeapons = table.count(aWeapons)
+	local iOk = 0
+	for i, hWeapon in pairs(aWeapons) do
+		if (hWeapon and self:IsVehicleWeaponOk(hVehicle, hWeapon)) then
+			iOk = iOk + 1
+
+			hWeapon:SetDirectionVector(vTargetDir)
+			self:StartFire_Vehicle(hWeapon)
+		end
+	end
+
+	if (iOk == 0) then
+		self:StopFire_Vehicle()
+		return false
+	end
+
+	g_localActor.actor:SetVehicleViewDir(vTargetDir)
+	BotMainLog("etting dir!!ss")
+
+	--[[
+
+
+	-- !! trash, need to set dir directly somewhere
+	local yawCameraDir, pitchCameraDir = vector.getyawpitch(vCamDir)
+	local yawToTarget, pitchToTarget = vector.getyawpitch(vTargetDir)
+
+	local yawAdjustment = yawToTarget - yawCameraDir
+	local pitchAdjustment = pitchToTarget - pitchCameraDir
+
+	local iYaw = yawAdjustment
+	local iPitch = pitchAdjustment
+
+	iPitch = math.asin(vTargetDir.y / vector.length(vTargetDir));
+	iYaw = math.asin( vTargetDir.x / (math.cos(iPitch)*vector.length(vTargetDir)) )
+
+	BotMainLog("iYaw=%f",iYaw)
+	--g_localActor.actor:SimulateInput(KEY_V_ROTATEYAW, 1, iYaw)
+	--g_localActor.actor:SimulateInput(KEY_V_ROTATEPITCH, 1, iPitch)
+	--g_localActor.actor:SimulateInput(KEY_V_ROTATEPITCH, 1, iPitch)
+
+	local iDirection = self:GetDirection(vTargetPos)
+	if (BitAND(iDirection, eDirection_Right)) then
+		g_localActor.actor:SimulateInput(KEY_V_ROTATEYAW, 1, 1)
+		BotMainLog("right")
+	end
+
+	BotMainLog("Fire in vehicle ??")
+	--]]
+	return true
+end
+
+------------------------------
+--- Init
+Bot.IsVehicleWeaponOk = function(self, hVehicle, hWeapon)
+
+	if (not hVehicle or not hWeapon) then
+		return
+	end
+
+	local sAmmo = hWeapon.weapon:GetAmmoType()
+	if (not sAmmo) then
+		return
+	end
+
+	--local iAmmo = hWeapon.weapon:GetAmmoCount(sAmmo)
+	local iClip = hWeapon.weapon:GetClipSize(sAmmo)
+	--local iVehicleAmmo = hVehicle.vehicle:GetAmmoCount(sAmmo)
+	local iCapacity = hVehicle.inventory:GetAmmoCapacity(sAmmo)
+	local iAmmo = hVehicle.inventory:GetAmmoCount(sAmmo)
+
+	if (iCapacity <= 0) then
+		BotMainLog("No clip size ?")
+		return true
+	end
+
+	BotMainLog("check weapon %s %d", hWeapon.class, iAmmo)
+	return (iAmmo > 0)
+end
+------------------------------
+--- Init
+Bot.StartFire_Vehicle = function(self, hWeapon)
+
+	if (not hWeapon) then
+		return
+	end
+
+	self.VEHICLE_FIRING = timerinit()
+	self.VEHICLE_FIRING_WEAPONS = checkArray(self.VEHICLE_FIRING_WEAPONS, {})
+	self.VEHICLE_FIRING_WEAPONS[hWeapon.id] = hWeapon
+	hWeapon.weapon:RequestStartFire()
+
+end
+
+------------------------------
+--- Init
+Bot.StopFire_Vehicle = function(self)
+
+	self.VEHICLE_FIRING = nil
+	local aActive = self.VEHICLE_FIRING_WEAPONS
+	if (not isArray(aActive)) then
+		return
+	end
+
+	for idWeapon, hWeapon in pairs(aActive) do
+		hWeapon.weapon:RequestStopFire()
+	end
+
+	self.VEHICLE_FIRING_WEAPONS = {}
+end
+
+
+------------------------------
+--- Init
+Bot.UpdateVehicleStats = function(self, hVehicle)
+	if (not hVehicle) then
+		return
+	end
+
+	if (not hVehicle.INITIALIZED) then
+
+		hVehicle.IsTank = function()
+			return (string.matchex(hVehicle.class, unpack(VEHICLE_TANKS)))
+		end
+		hVehicle.IsSmall = function()
+			return (string.matchex(hVehicle.class, VEHICLE_LTV, VEHICLE_CIV))
+		end
+
+	end
+
+	hVehicle.INITIALIZED = true
+end
+
+
+------------------------------
+--- Init
+Bot.UpdateDriving = function(self)
+
+	local hVehicle = self:GetVehicle()
+	if (not hVehicle or not self:IsDriving()) then
+		return
+	else
+		self:UpdateVehicleStats(hVehicle)
+	end
+
+	if (not timerexpired(hVehicle.EXIT_TIMER, 0.1)) then
+		return
+	end
+
+	local vPos = self:GetPos()
+	local iSpeed = hVehicle:GetSpeed()
+	local vVehicle = hVehicle:GetPos()
+
+	local vGoal = BotNavigation:GetPathGoal()
+	if (vGoal) then
+		local iDistance = vector.distance(vGoal, vVehicle)
+		BotMainLog("distance to goal = %f",iDistance)
+		if (iDistance < 25) then
+			self:LeaveVehicle()
+			return
+		end
+	end
+
+	if (hVehicle.vehicle:IsFlipped()) then
+		self:LeaveVehicle()
+		return
+	end
+
+	self:UpdateVehicleStuck(hVehicle)
+
+	local bStaticInFront = self:GetStaticEntitiesInFront(vector.modifyz(vVehicle, 1), hVehicle:GetDirectionVector(), 5, hVehicle.id)
+	BotMainLog("bStaticInFront=%s",tostring(bStaticInFront))
+	if ((bStaticInFront or hVehicle:IsStuck()) and not self:IsVehicleFiring()) then
+
+		if (bStaticInFront or (hVehicle.STUCK_TRIED_BOOST and hVehicle.STUCK_TRIED_BOOST.expired())) then
+
+			if (hVehicle.STUCK_TRIED_BACKUP and hVehicle.STUCK_TRIED_BACKUP.expired()) then
+				hVehicle.FATAL_STUCK_TIMER = timerinit()
+				self:LeaveVehicle()
+				return
+			else
+
+				self.VEHICLE_ACTION_GOBACK = true
+				BotMainLog("going BACK in VEHICLE !!")
+				hVehicle.STUCK_TRIED_BACKUP = checkVar(hVehicle.STUCK_TRIED_BACKUP, timernew((bStaticInFront and 1 or 4)))
+			end
+		else
+			hVehicle.STUCK_TRIED_BOOST = checkVar(hVehicle.STUCK_TRIED_BOOST, timernew(5))
+			self:PressKey(KEY_VEHICLE_BOOST, 1)
+		end
+		return
+	else
+		hVehicle.STUCK_TRIED_BACKUP = nil
+	end
+
+	if (not self:IsUnderground(vPos)) then
+		local iCountToIndoors = checkNumber(BotNavigation:GetNodeCountToIndoors(true), 999)
+		local bStay = AIEvent("OkInVehicle", hVehicle)
+		if (bStay == 0xDEAD) then
+			bStay = true
+		end
+		if (bStay ~= true or ((iCountToIndoors < 8))) then
+			BotMainLog("bStay = %s OR %d < 8 AND %s", tostring(bStay~=true), iCountToIndoors, tostring(BotNavigation:IsCurrentNodeIndoors(true)))
+			self:LeaveVehicle()
+			return
+		end
+	end
+
+	BotMainLog("%f speed", iSpeed)
+	if (iSpeed > 8 and self.VEHICLE_ACTION_STEER and (self.VEHICLE_ACTION_SHARPTURN or iSpeed >= 8)) then
+		self:PressKey(KEY_VEHICLE_BRAKE, 0.1)
+		self.VEHICLE_ACTION_STEER = nil
+		self.VEHICLE_ACTION_SHARPTURN = nil
+		BotMainLog("short brake !!")
+	end
+end
+
+------------------------------
+--- Init
+Bot.UpdateVehicleVar = function(self)
+
+	local hVehicle = self:GetVehicle()
+	if (hVehicle) then
+		self.DRIVING_VEHICLE = true
+		self.VEHICLE_TYPE = hVehicle.vehicle:GetMovementType()
+		self.VEHICLE_DIRECTION = hVehicle:GetDirectionVector()
+		self.DRIVING_VEHICLE_ISDRIVER = (hVehicle:GetDriverId() == g_localActorId)
+	else
+		self.DRIVING_VEHICLE = nil
+		self.VEHICLE_TYPE = nil
+		self.VEHICLE_DIRECTION = nil
+		self.DRIVING_VEHICLE_ISDRIVER = nil
+	end
+
+end
+
+------------------------------
+--- Init
+Bot.IsVehicleFiring = function(self)
+	return (not timerexpired(self.VEHICLE_FIRING))
+end
+
+------------------------------
+--- Init
+Bot.UpdateVehicleStuck = function(self, hVehicle)
+
+	local hVehicle = checkVar(hVehicle, self:GetVehicle())
+	if (not hVehicle) then
+		return
+	end
+
+	local iSpeed = hVehicle:GetSpeed()
+	if (iSpeed < 1) then
+		hVehicle.STUCK_TIME = (hVehicle.STUCK_TIME or 0) + System.GetFrameTime()
+	else
+		hVehicle.STUCK_TIME = 0
+	end
+
+	if (not hVehicle.IsStuck) then
+		hVehicle.IsStuck = function()
+			return (hVehicle.STUCK_TIME >= 5)
+		end
+	end
+end
+
+------------------------------
+--- Init
+Bot.GetStaticEntitiesInFront = function(self, vPos, vDir, iDist, idIgnore)
+
+	local iDistance = math.limit(checkNumber(iDist, 1), 1, BOT_RAYWORLD_MAXDIST)
+	local iHits = Physics.RayWorldIntersection(vPos, vector.scale(vDir, iDistance), iDistance, ent_all - ent_living - ent_rigid, g_localActorId, nil, g_HitTable)
+	if (iHits == 0) then
+		return false
+	end
+
+	for i = 1, iHits do
+		local aHit = g_HitTable[i]
+		if (aHit) then
+			local hHit = aHit.entity
+			if (aHit.foliage or (hHit and (hHit.id == idIgnore or hHit.id == g_localActorId))) then
+				iHits = (iHits - 1)
+			end
+		end
+	end
+	return (iHits > 0)
+end
+
+------------------------------
+--- Init
+Bot.GetEntityInFront = function(self, vPos, vDir, iDist, idEntity)
+
+	local iDistance = math.limit(checkNumber(iDist, 1), 1, BOT_RAYWORLD_MAXDIST)
+	local iHits = Physics.RayWorldIntersection(vPos, vector.scale(vDir, iDistance), iDistance, ent_all, g_localActorId, nil, g_HitTable)
+	if (iHits == 0) then
+		return false--, BotMainLog("no collision")
+	end
+
+	local aHit = g_HitTable[1]
+	if (aHit) then
+		local hHit = aHit.entity
+		if (hHit) then
+			--BotMainLog("collided: %s (%s==%s,%s)", tostring(hHit:GetName()),tostring(hHit.id),tostring(idEntity), tostring(idEntity==hHit.id))
+			return (hHit.id == idEntity)
+		end
+	end
+	return false
+end
+
+------------------------------
+--- Init
 Bot.UpdateTerrainVar = function(self)
 
 	local vPos = g_localActor:GetPos()
@@ -1579,7 +2041,15 @@ Bot.IsTarget_SameTeam = function(self, hTarget)
 		return false
 	end
 
-	local bSameTeam = (self:GetTeam(g_localActorId) == self:GetTeam(hTarget.id))
+	local hCheck = GetEntity(hTarget)
+	if (not hCheck) then
+		return false, BotMainLog("bad team identifier %s", tostring(hTarget))
+	end
+
+	local iMyTeam = self:GetTeam(g_localActorId)
+	local iEntTeam = self:GetTeam(hCheck.id)
+
+	local bSameTeam = (iMyTeam == iEntTeam)
 	return (bSameTeam)
 end
 
@@ -1755,7 +2225,7 @@ Bot.IsPointVisible = function(self, hEntity)
 	end
 
 	if (not vector.isvector(vPoint)) then
-		return false
+		return false, BotMainLog("Poinint is not visile")
 	end
 	return (System.IsPointVisible(vPoint))
 end
@@ -1849,11 +2319,20 @@ end
 
 ------------------------------
 --- Init
-Bot.CanSee_Position = function(self, vTarget)
+Bot.CanSee_Position = function(self, vTarget, idEntity)
 	if (not vector.isvector(vTarget)) then
 		return
 	end
 	return Physics.RayTraceCheck(self:GetPos_Head(), vTarget, g_localActorId, checkVar(idEntity, checkVar(self:GetTargetId(), g_localActorId)))
+end
+
+------------------------------
+--- Init
+Bot.CanSee_Entity = function(self, hEntity)
+	if (not isArray(hEntity)) then
+		return
+	end
+	return Physics.RayTraceCheck(self:GetPos_Head(), vector.modifyz(hEntity:GetPos(), 0.25), g_localActorId, hEntity.id)
 end
 
 ------------------------------
@@ -1921,8 +2400,16 @@ Bot.IsUnderground = function(self, iCheck, iThreshold)
 
 		local vPos = iCheck
 		local iTerrain = System.GetTerrainElevation(vPos)
-		local iUnder = (vPos.z - checkNumber(iTerrain, 0))
+		if (not iTerrain) then
+			return true--, BotMainLog("NO TERRAIN FOUND !!")
+		end
 
+		local iUnder = (vPos.z - checkNumber(iTerrain, 0))
+		if (iUnder > 0) then
+			return false--, BotMainLog("not under")
+		end
+
+		--BotMainLog("->%s %f < %f", tostring((iUnder < checkNumber(iThreshold, 0))), iUnder, iThreshold or 0)
 		return (iUnder < checkNumber(iThreshold, 0))
 	end
 
@@ -2003,9 +2490,229 @@ end
 
 ------------------------------
 --- Init
+Bot.ClearGotoVehicle = function(self)
+	self.GOTO_VEHICLE = nil
+	self.GOTO_VEHICLE_TIMER = nil
+end
+
+
+------------------------------
+--- Init
+Bot.ValidateVehicle = function(hVehicle)
+
+	if (not isArray(hVehicle)) then
+		return false
+	end
+
+	if (not GetEntity(hVehicle.id)) then
+		return false
+	end
+
+	if (not timerexpired(hVehicle.FATAL_STUCK_TIMER, 30)) then
+		return
+	end
+
+	local iRadius = 15
+	local iMineRadius = 10 -- AV Mine
+	local aAllowed = {
+		VEHICLE_CIV,
+		VEHICLE_LTV, -- all ltvs
+		VEHICLE_TANK, -- all tanks
+		VEHICLE_APC, -- all npcs
+	}
+
+	-----------
+	local vPos = g_localActor:GetPos()
+	local vVehicle = hVehicle:GetPos()
+	local vVehicle_Modified = vector.modify(vVehicle, 1.25)
+	local iDistance = vector.distance(vPos, vVehicle)
+	if (iDistance > iRadius) then
+		return false
+	end
+
+	-----------
+	if (hVehicle.vehicle:IsDestroyed()) then
+		return false
+	end
+
+	if (hVehicle.vehicle:GetRepairableDamage() > 30) then
+		return false
+	end
+
+	if (hVehicle.vehicle:IsFlipped()) then
+		return false
+	end
+
+	-----------
+	if (not string.matchex(hVehicle.class, unpack(aAllowed))) then
+		return false, BotMainLog("bad class")
+	end
+
+	-----------
+	if (Bot:VehicleFull(hVehicle)) then
+		return false, BotMainLog("space bad")
+	end
+
+	if (not Bot:DriverSeatFree(hVehicle)) then
+		return false, BotMainLog("driver seat bad")
+	end
+
+	-----------
+	local aNearbyMines = GetEntities({ ENTITY_AVMINE, ENTITY_CLAYMORE }, nil, function(a)
+
+		if (not a or not isArray(a) or not a.GetPos) then
+			return false
+		end
+		return (not Bot:IsTarget_SameTeam(a) and vector.distance(vVehicle, a:GetPos()) < iMineRadius)
+	end)
+
+	if (table.count(aNearbyMines) > 0) then
+		return false, BotMainLog("AVMINES bad")
+	end
+
+	-----------
+	if (not Bot:IsPointVisible(vVehicle_Modified)) then
+		return false, BotMainLog("visibility bad 2")
+	end
+
+	-----------
+	if (not Bot:CanSee_Position(vVehicle_Modified) and not Bot:CanSee_Entity(hVehicle)) then
+		return false, BotMainLog("visibility bad")
+	end
+
+	-----------
+	local iZDiff = (vVehicle.z - vPos.z)
+	if (iZDiff < 0) then
+		iZDiff = iZDiff * -1
+	end
+
+	if (iZDiff > 1 and not Pathfinding:IsPointOnTerrain(vPos) and not Pathfinding:IsPointOnTerrain(vVehicle)) then
+		return BotMainLog("elevation bad")
+	end
+
+	if (not timerexpired(BotNavigation.LEAVE_INDOORS_TIMER, 0.25)) then
+		return BotMainLog("just lft indoors")
+	end
+
+	if (not timerexpired(Bot.LAST_USED_DOOR, 0.25)) then
+		return BotMainLog("just lft indoors")
+	end
+
+	-----------
+	BotMainLog("Goto vehicle !")
+	return true
+end
+
+------------------------------
+--- Init
+Bot.FindVehicle = function(self)
+
+	if (self:IsDriving()) then
+		return
+	end
+
+	local vPos = g_localActor:GetPos()
+	local vCamPos = self:GetViewCameraPos()
+	local vCamDir = self:GetViewCameraDir()
+
+	local hCurrent = self.GOTO_VEHICLE
+	if (hCurrent) then
+		if (not self.ValidateVehicle(hCurrent)) then
+			self:ClearGotoVehicle()
+		else
+			local vCurrent = hCurrent:GetPos()
+			if (vector.distance(vCurrent, vPos) < 3 or self:GetEntityInFront(vector.modifyz(vCamPos, -0.5), vCamDir, 1, hCurrent.id)) then
+				self:InterruptMovement(eMovInterrupt_FindUber, 1)
+				self:ClearGotoVehicle()
+				self:EnterVehicle(hCurrent)
+			else
+				self:StartMoving(MOVE_FORWARD, vCurrent)
+				self.FORCED_CAM_LOOKAT = vector.modifyz(vCurrent, 1.5)
+			end
+			return
+		end
+	end
+	if (BotNavigation:IsTargetPlayer()) then
+		return
+	end
+
+	local vGoal = BotNavigation:GetPathGoal()
+	if (vGoal and vector.distance(vPos, vGoal) < 60) then
+		return
+	end
+
+	local aVehicles = GetEntities(GET_ALL, "vehicle", self.ValidateVehicle)
+	if (table.count(aVehicles) == 0) then
+		return
+	end
+
+	local aBest = { -1 }
+	for i, hTemp in pairs(aVehicles) do
+		local iDistance = vector.distance(hTemp, vPos)
+		if (aBest[1] == -1 or iDistance < aBest[1]) then
+			aBest = {
+				iDistance,
+				hTemp
+			}
+		end
+	end
+
+	local hVehicle = aBest[2]
+	if (not hVehicle) then
+		return
+	end
+
+	self.GOTO_VEHICLE = hVehicle
+	self.GOTO_VEHICLE_TIMER = timerinit()
+end
+
+------------------------------
+--- Init
+Bot.VehicleFull = function(self, hCheck)
+	if (not hCheck) then
+		return true
+	end
+
+	local aSeats = hCheck.Seats
+	local iSeats = table.count(aSeats)
+	local iFilled = 0
+	for i, aSeat in pairs(aSeats) do
+		if (aSeat.passengerId) then
+			iFilled = iFilled + 1
+		end
+	end
+
+	return (iFilled >= iSeats)
+end
+
+------------------------------
+--- Init
+Bot.DriverSeatFree = function(self, hCheck)
+	if (not hCheck) then
+		return
+	end
+
+	if (hCheck:HasDriver()) then
+		return true
+	end
+
+	-- delete
+	local bFree = true
+	for i, aSeat in pairs(hCheck.Seats) do
+		if (aSeat.isDriver) then
+			bFree = (bFree or (not aSeat.passengerId))
+		end
+	end
+
+	return bFree
+end
+
+
+------------------------------
+--- Init
 Bot.GetVehicle = function(self, hCheck)
 
-	local idVehicle = checkVar(g_localActor, hCheck).actor:GetLinkedVehicleId()
+	local idVehicle = checkVar(hCheck, g_localActor).actor:GetLinkedVehicleId()
 	if (not idVehicle) then
 		return
 	end
@@ -2018,12 +2725,12 @@ end
 Bot.GetVehicleType = function(self, hCheck)
 
 	local sType
-	local hCheck = checkVar(g_localActor, hCheck)
-	if (isArray(hCheck)) then
-		if (hCheck.vehicle) then
-			sType = hCheck.class
-		elseif (hCheck.actor) then
-			local hVehicle = self:GetVehicle(hCheck)
+	local hTarget = checkVar(hCheck, g_localActor)
+	if (isArray(hTarget)) then
+		if (hTarget.vehicle) then
+			sType = hTarget.class
+		elseif (hTarget.actor) then
+			local hVehicle = self:GetVehicle(hTarget)
 			if (hVehicle) then
 				sType = hVehicle.class
 			end
@@ -2031,6 +2738,82 @@ Bot.GetVehicleType = function(self, hCheck)
 	end
 
 	return sType
+end
+
+------------------------------
+--- Init
+Bot.IsVehicleTank = function(self, hCheck)
+
+	local hVehicle = checkVar(hCheck, self:GetVehicle())
+	if (not hVehicle) then
+		return
+	end
+
+	return (string.matchex(hVehicle.class, unpack(VEHICLE_TANKS)))
+end
+
+------------------------------
+--- Init
+Bot.GetVehicleWeapons = function(self, hCheck)
+
+	local hVehicle = checkVar(hCheck, self:GetVehicle())
+	if (not hVehicle) then
+		return
+	end
+
+	local aSeats = hVehicle.Seats
+	local iSeat = self:GetVehicleSeat(hVehicle)
+	if (not iSeat) then
+		return
+	end
+
+	local aSeat = aSeats[iSeat]
+	if (not aSeat) then
+		return
+	end
+
+	if (not aSeat.passengerId == g_localActorId) then
+		return
+	end
+
+	local iWeapons = aSeat.seat:GetWeaponCount()
+	if (iWeapons < 1) then
+		return
+	end
+
+	local aWeapons = {}
+	for i = 1, iWeapons do
+		local idWeapon = aSeat.seat:GetWeaponId(i)
+		if (idWeapon) then
+			BotMainLog("weapon[%d] found", i)
+			local hWeapon = GetEntity(idWeapon)
+			if (hWeapon) then
+				table.insert(aWeapons, hWeapon)
+			end
+		end
+	end
+
+	return aWeapons
+end
+
+------------------------------
+--- Init
+Bot.GetVehicleSeat = function(self, hCheck, idCheck)
+
+	local hVehicle = checkVar(hCheck, self:GetVehicle())
+	if (not hVehicle) then
+		return
+	end
+
+	local iSeat
+	for i, aSeat in pairs(hVehicle.Seats) do
+		if (aSeat:GetPassengerId() == checkVar(idCheck, g_localActorId)) then
+			iSeat = aSeat.seatId
+			break
+			--BotMainLog("seat %d %s==%s", aSeat.seatId,tostring(aSeat.passengerId), tostring(checkVar(idCheck, g_localActorId)))
+		end
+	end
+	return iSeat
 end
 
 ------------------------------
@@ -2068,8 +2851,34 @@ end
 
 ------------------------------
 --- Init
-Bot.HasItem = function(self, sClass)
-	return (g_localActor.inventory:GetItemByClass(sClass))
+Bot.HasItem = function(self, sClass, bGetHandle)
+	local bHas = (g_localActor.inventory:GetItemByClass(sClass))
+	if (bHas) then
+		if (bGetHandle) then
+			return bHas
+		end
+		return true
+	end
+
+	local aInventory = self:GetInventory()
+	if (not aInventory) then
+		return
+	end
+
+	local bOk
+	local hWeapon, hLast
+	for i, idWeapon in pairs(aInventory) do
+		hWeapon = GetEntity(idWeapon)
+		if (hWeapon and hWeapon.class == sClass) then
+			hLast = hWeapon
+			bOk = true
+		end
+	end
+
+	if (bGetHandle) then
+		return hLast
+	end
+	return bOk
 end
 
 ------------------------------
@@ -2133,7 +2942,7 @@ Bot.AmmoStockFull = function(self, sClass, iCheck)
 		hWeapon = GetEntity(idWeapon)
 	end
 
-	if (not hWeapon.weapon) then
+	if (not (hWeapon and hWeapon.weapon)) then
 		return 0
 	end
 
@@ -2176,11 +2985,15 @@ end
 ------------------------------
 --- Init
 Bot.GetItem = function(self, sClass)
+
 	if (sClass) then
-		local idWeapon = self:HasItem(sClass)
+		--BotMainLog("GetItem(%s)", sClass)
+		local idWeapon = self:HasItem(sClass, true)
 		if (not idWeapon) then
+		--	BotMainLog("not found(%s)", sClass)
 			return
 		end
+		--BotMainLog("id(%s)", tostring(idWeapon))
 		return GetEntity(idWeapon)
 	end
 	return (g_localActor.inventory:GetCurrentItem())
@@ -2545,10 +3358,30 @@ Bot.UpdateItem = function(self, bForce)
 		return false
 	end
 
+	local iDistance = self:GetDistance(hTarget)
+
+	local vTarget, aVehicles, hClosestVehicle
+	local vPos = self:GetPos()
+	local bNearVehicle = false
+	if (hTarget and iDistance > 15) then
+		vTarget = hTarget:GetPos()
+		aVehicles = GetEntities(GET_ALL, "vehicle", function(hEnt)
+			return (not hEnt.vehicle:IsDestroyed() and vector.distance(vTarget, hEnt:GetPos()) < 8.5 and not self:IsTarget_SameTeam(hEnt))
+		end)
+		bNearVehicle = (table.count(aVehicles) > 0)
+		if (bNearVehicle) then
+			table.sort(aVehicles, function(a, b) return (vector.distance(a:GetPos(), vTarget) < vetor.distance(b:GetPos(), vTarget))  end)
+			hClosestVehicle = aVehicles[1]
+			if (self:GetDistance(hClosestVehicle) < 12) then
+				hClosestVehicle = nil
+			end
+		end
+	end
+
 	local hVehicle = self:GetVehicle(hTarget)
 	local iVehicle = self:GetVehicleType(hVehicle)
 	if (self.COMBAT_RELOAD_TIMER and not self.COMBAT_RELOAD_TIMER.expired()) then
-		return
+		return true
 	end
 
 	local hCurrentItem = self:GetItem()
@@ -2557,18 +3390,31 @@ Bot.UpdateItem = function(self, bForce)
 		return false
 	end
 
+	local bIndoors = self:IsIndoors()
 	local bSelected = false
-	local iDistance = self:GetDistance(hTarget)
 	local bAmmoOk = self:AmmoOk(hCurrentItem)
+	local iSpeed = 0
+	if (hTarget) then
+		iSpeed = hTarget:GetSpeed()
+	end
 	local iRPGSpeed = -1
 
 	BotMainLog("ammo ok= %s",string.bool(bAmmoOk))
+	BotMainLog("rpg ok= %s",string.bool(self:HasItem(WEAPON_RPG)))
+	BotMainLog("rpg AMMO ok= %s",string.bool(self:AmmoOk(WEAPON_RPG)))
 
 	local bRPG = (self:HasItem(WEAPON_RPG) and self:AmmoOk(WEAPON_RPG))
-	if (bRPG and hVehicle) then
-		if (hTarget:GetSpeed() > iRPGSpeed or iVehicle ~= VEHICLE_CIV) then
+	if (not bIndoors and bRPG and (hVehicle or bNearVehicle)) then
+		BotMainLog("vehicle and RPG %f>%f",iSpeed,iRPGSpeed)
+		if (iSpeed > iRPGSpeed or iVehicle ~= VEHICLE_CIV) then
 			self:SetItem(WEAPON_RPG)
-			return
+			if (hClosestVehicle) then
+				self.FORCED_CAM_LOOKAT = vector.modifyz(hClosestVehicle:GetPos(), 1.5)
+			elseif (hVehicle) then
+				self.FORCED_CAM_LOOKAT = vector.modifyz(hVehicle:GetPos(), 1.5)
+			end
+			BotMainLog("rpg ok")
+			return true
 		end
 	end
 
@@ -2633,6 +3479,7 @@ Bot.UpdateItem = function(self, bForce)
 			if (iDistance > 10) then
 				self.COMBAT_RELOAD_TIMER = timernew(5)
 				self:ReloadWeapon(hPanicSelect)
+				bSelected = true
 				BotMainLog("inventory ammo ok, reload!")
 			else
 				self:SetItem("Fists")
@@ -2664,8 +3511,15 @@ Bot.UpdateItem = function(self, bForce)
 
 		if (not bSelected and not bAmmoOk and not bForce) then
 			BotMainLog("AMMO : BAD!")
-			self:SetItem("Fists")
-			self:FindItem()
+			if (iDistance > 10 and hCurrent and self:InventoryAmmoOk(hCurrent)) then
+				self.COMBAT_RELOAD_TIMER = timernew(5)
+				self:ReloadWeapon(hCurrent)
+				bSelected = true
+				BotMainLog("inventory ammo ok, reload!")
+			else
+				self:SetItem("Fists")
+				self:FindItem()
+			end
 		end
 	end
 
@@ -2745,7 +3599,7 @@ Bot.UpdateInventory = function(self)
 	if ((bTarget or bNear)) then
 		local bUpdated = self:UpdateItem(bNear)
 		if (bUpdated) then
-			return
+			return BotMainLog("target or nearby updated")
 		end
 	end
 
@@ -2824,7 +3678,7 @@ end
 Bot.UpdateTargets = function(self)
 
 	if (self:IsWallJumping() and not self:IsEndingWallJump()) then
-		return BotMainLog("Walljumping")
+		return false, BotMainLog("Walljumping")
 	end
 
 	local hNewTarget = self:CheckForTargets()
@@ -2842,6 +3696,8 @@ Bot.UpdateTargets = function(self)
 		if (self:IsSpectating(hTarget)) then
 			return false, self:ClearTarget()
 		end
+
+		local bDriving = self:IsDriving()
 
 		local vPos = self:GetPos()
 		local vTarget = hTarget:GetPos()
@@ -2871,7 +3727,7 @@ Bot.UpdateTargets = function(self)
 		local bAlive = self:IsAlive(hTarget)
 		local bVisible = self:IsVisible(hTarget)
 		local hItem = self:GetItem()
-		local bFists = (hItem and hItem.class == "Fists")
+		local bFists = (hItem and hItem.class == WEAPON_FISTS)
 		local bAmmoOk = self:AmmoOk(hItem)
 
 		BotMainLog("t = %s, alive = %s, visible = %s, new target = %s",
@@ -2882,8 +3738,14 @@ Bot.UpdateTargets = function(self)
 		)
 
 		if (bAlive) then
-
 			if (bVisible) then
+				if (bDriving) then
+					if (not self:UpdateVehicleShooting()) then
+						self:LeaveVehicle()
+					else
+						return true
+					end
+				end
 
 				self.RUNNING_TO_TARGET = nil
 				if (bFists) then
@@ -2944,6 +3806,10 @@ Bot.UpdateTargets = function(self)
 					BotMainLog("dead. ne target !!")
 					self:SetTarget(hNewTarget)
 					return true
+				end
+
+				if (self:IsDriving()) then
+					self:LeaveVehicle()
 				end
 
 				if (bFists) then
@@ -3139,7 +4005,7 @@ Bot.ProcessCombatMovement = function(self, iTimerExpire)
 		sKey = MOVE_LEFT
 	end
 
-	self:StartMoving(sKey)
+	self:StartMoving(sKey, nil, 0.25)
 	self.BOT_COMBAT_MOVEKEY = sKey
 	self.BOT_COMBAT_TIMER_LASTMOVE = timerinit()
 	self.BOT_FORCED_NOSPRINT = true
@@ -3158,26 +4024,33 @@ Bot.AmmoOk = function(self, hCheck, iCheck)
 
 	local hWeapon
 	if (isString(hItem)) then
+		--BotMainLog("Its a string !")
 		hWeapon = self:GetItem(hItem)
 	else
+		--BotMainLog("Its a weapon handle ?? !")
 		hWeapon = hItem
 	end
 
 	if (not (hWeapon and hWeapon.weapon)) then
+		--BotMainLog("Weapon %s not found (%s)", tostring(hWeapon), tostring(hItem))
 		return false
 	end
 
 	local iAmmo = hWeapon.weapon:GetAmmoCount()
 	local iClip = hWeapon.weapon:GetClipSize()
 
-	if (iAmmo == nil) then
+	if (iAmmo == nil or iAmmo < 1) then
+
+		if (hCheck == WEAPON_RPG) then
+			--BotMainLog("iammo=%f, iclip=%f, itest=%f", iAmmo, iClip, self:GetInventoryAmmo(hCheck))
+		end
 		return false
 	end
 
 	if (iCheck) then
 		local iPercent = ((iClip / iAmmo) * 100)
 		math.fix(iPercent)
-		BotMainLog("ammo score %% = %f>=%f=%s",iPercent,iCheck,string.bool((iPercent ~= INF and iPercent >= iCheck)))
+		--BotMainLog("ammo score %% = %f>=%f=%s",iPercent,iCheck,string.bool((iPercent ~= INF and iPercent >= iCheck)))
 		return (iPercent ~= INF and iPercent >= iCheck)
 	end
 
@@ -3410,13 +4283,18 @@ Bot.UpdateMovement = function(self)
 	self:UpdateSuitMode()
 	self:UpdateIndoorsVar()
 	self:UpdateTerrainVar()
+	self:UpdateVehicleVar()
+	self:UpdateDriving()
 
 	local bUpdateNavi = true
+	local bFindVehicle = false
 	if (self:UpdateTargets()) then
 		bUpdateNavi = false
 		if (self:IsWallJumping()) then
 			self:StopWallJump()
 		end
+	elseif (not self:HasTarget()) then
+		bFindVehicle = true
 	end
 
 	self:UpdateInventory()
@@ -3424,16 +4302,26 @@ Bot.UpdateMovement = function(self)
 
 	if (self:HasGrab()) then
 		bUpdateNavi = false
+		bFindVehicle = false
 	end
 
 	if (bUpdateNavi and self:UpdateWallJump()) then
 		bUpdateNavi = false
+		bFindVehicle = false
 	end
 
 	--BotMainLog("!we have a grab..%s",string.bool(bUpdateNavi))
+	self:ContinueMovement(eMovInterrupt_FindUber)
 	if (bUpdateNavi) then
 		BotNavigation:Update()
-		self:CheckWallJump()
+
+		if (not self:IsDriving()) then
+			self:CheckWallJump()
+		end
+
+		if (bFindVehicle and not self:HasTarget()) then
+			self:FindVehicle()
+		end
 	end
 
 	local aMove = self.CURRENT_MOVEMENT
@@ -3465,8 +4353,9 @@ Bot.UpdateMovement = function(self)
 		local bStuck = self:IsStuck(0.15)
 		local bObstacle, iPreferredSuit = self:GetJumpableObstacle()
 		if (bObstacle and bStuck) then
-			if (self:OkToJump()) then
+			if (self:OkToJump() and timerexpired(self.MELEE_TIMER, 2.5)) then
 				self:StartJump()
+				BotMainLog("stuck jump ->")
 				--self:StopJump()
 			end
 		end
@@ -3481,7 +4370,9 @@ Bot.UpdateMovement = function(self)
 		end
 
 		local bSwimming = self:IsSwimming()
-		if (bSwimming and not BotNavigation:IsCurrentNodeUnderwater()) then
+		local bNodeUnderwater = BotNavigation:IsCurrentNodeUnderwater()
+		if (bSwimming and not bNodeUnderwater) then
+			BotMainLog("bNodeUnderwater = %s",tostring(bNodeUnderwater))
 			self:StartJump()
 		end
 
@@ -3495,7 +4386,7 @@ Bot.UpdateMovement = function(self)
 				self.LAST_USED_DOOR_STATE = hDoor.action
 
 				if (hDoor:IsClosed()) then
-					self:InterruptMovement(eMovInterrupt_DoorPause, 1)
+					self:InterruptMovement(eMovInterrupt_DoorPause, 0.5)
 				end
 			end
 		elseif (hDoor and timerexpired(hDoor.USE_TIMER, 1)) then
@@ -3577,6 +4468,10 @@ Bot.SetCameraTarget = function(self, vTarget, iCamSpeed)
 	------
 	vDir = vector.getdir(vTarget, vHead, true)
 	g_localActor.actor:SetSmoothDirection(vDir, iSpeed)
+	if (iSpeed == BOT_CAMERASPEED_INSTANT) then
+		g_localActor.actor:SetAngles(vector.getang(vTarget, vHead))
+		BotMainLog("instant")
+	end
 	--BotMainLog("cam speed = %f",iSpeed)
 
 	------
@@ -3591,7 +4486,7 @@ end
 
 ------------------------------
 --- Init
-Bot.StartMoving = function(self, iMode, vTarget)
+Bot.StartMoving = function(self, iMode, vTarget, iKeyTime)
 
 	local aKeyMap = {
 		[MOVE_FORWARD] 	= { KEY_FORWARD, 	self:GetPos_Front(1) },
@@ -3604,6 +4499,73 @@ Bot.StartMoving = function(self, iMode, vTarget)
 		[VEHICLE_MOVE_LEFT] 	= { KEY_V_LEFT, 	self:GetPos_Front(1, vector.rotaten(self:GetPos(), 1)) },
 		[VEHICLE_MOVE_RIGHT] 	= { KEY_V_RIGHT, 	self:GetPos_Front(1, vector.rotaten(self:GetPos(), 3)) },
 	}
+
+	local sExtraKey
+	local bReleaseKey
+	if (self.DRIVING_VEHICLE) then
+		if (self.VEHICLE_TYPE == eVehicleType_Land) then
+
+			if (iMode == MOVE_FORWARD) then
+				iMode = VEHICLE_MOVE_FORWARD
+
+				local iDirection, iDot = self:GetDirection(vTarget, self.VEHICLE_DIRECTION)
+				BotMainLog("->" ..iDirection)
+
+				local bActionBack = self.VEHICLE_ACTION_GOBACK
+				local bBehind = (bActionBack or (BitAND(iDirection, eDirection_Back) ~= 0))
+				if (bBehind) then
+					self.VEHICLE_BACKUP_TIMER = timerinit()
+				end
+				if (bBehind or not timerexpired(self.VEHICLE_BACKUP_TIMER, 1)) then
+					iMode = VEHICLE_MOVE_BACKWARD
+				end
+
+				--if (iDirection == eDirection_Left) then
+				if (BitAND(iDirection, eDirection_Left) ~= 0) then
+
+					if (not bActionBack and iMode == VEHICLE_MOVE_BACKWARD) then
+						sExtraKey = KEY_V_RIGHT
+					else
+						sExtraKey = KEY_V_LEFT
+					end
+
+					self.VEHICLE_ACTION_STEER = timerinit()
+
+					if (iDot > 0.2) then
+						bReleaseKey = true
+						self.VEHICLE_ACTION_SHARPTURN = true
+						BotMainLog("slow down cowboy")
+					end
+					BotMainLog("too the leeeft")
+
+				--elseif (iDirection == eDirection_Right) then
+				elseif (BitAND(iDirection, eDirection_Right) ~= 0) then
+
+					if (not bActionBack and iMode == VEHICLE_MOVE_BACKWARD) then
+						sExtraKey = KEY_V_LEFT
+					else
+						sExtraKey = KEY_V_RIGHT
+					end
+
+					self.VEHICLE_ACTION_STEER = timerinit()
+
+					if (iDot < -0.2) then
+						bReleaseKey = true
+						self.VEHICLE_ACTION_SHARPTURN = true
+						BotMainLog("slow down cowboy")
+					end
+					BotMainLog("too the RIGHT %s",sExtraKey)
+
+				elseif (BitAND(iDirection, eDirection_Front) ~= 0) then
+					BotMainLog("death center")
+
+				end
+			end
+
+			self.VEHICLE_ACTION_GOBACK = nil
+			BotMainLog("Drviving car ")
+		end
+	end
 
 	local aMove = aKeyMap[iMode]
 	if (not aMove) then
@@ -3622,7 +4584,10 @@ Bot.StartMoving = function(self, iMode, vTarget)
 	end
 
 	local sKey, vGoal = aMove[1], checkVar(vTarget, aMove[2])
-	self:PressKey(sKey, -1)
+	self:PressKey(sKey, checkVar(iKeyTime, -1))
+	if (sExtraKey) then
+		self:PressKey(sExtraKey, 0.05)
+	end
 	self.CURRENT_MOVEMENT = {
 		sKey = sKey,
 		vGoal = vGoal,
@@ -3707,6 +4672,7 @@ Bot.ReleaseKey = function(self, iKey)
 		return
 	end
 
+	local sKey = aKey[2]
 	if (sKey == KEY_ATTACK) then
 		g_localActor.actor:SimulateInput(aKey[2], 2, 1)
 	else
@@ -3856,6 +4822,41 @@ end
 
 ------------------------------
 --- Init
+Bot.GetDirection = function(self, vTarget, vCam)
+
+	local vPos = self:GetPos()
+	local vCam = checkVar(vCam, self:GetViewCameraDir())
+
+	local vDir = vector.getdir(vTarget, vPos, 1)
+	local iDot_Dir = vector.dot(vCam, vDir)
+
+	local iFlags = 0
+	if (iDot_Dir < 0) then
+		BotMainLog("behind")
+		iFlags = eDirection_Back
+	else
+		BotMainLog("front")
+	end
+
+	local vCross = vector.cross(vCam, vDir)
+
+	local iDot = vector.dot(vCross, vectors.up)
+	local iThreshold = 0.1
+
+	local iDot2 = math.abs(iDot)
+	if (iDot2 > iThreshold) then
+		if (iDot < 0) then
+			return BitOR(iFlags, eDirection_Right), iDot2
+		elseif (iDot > 0) then
+			return BitOR(iFlags, eDirection_Left), iDot2
+		end
+	else
+		return eDirection_Front, iDot2
+	end
+end
+
+------------------------------
+--- Init
 Bot.GetBone_Dir = function(self, sBone, hEntity)
 	return (checkVar(hEntity, g_localActor):GetBoneDir(sBone))
 end
@@ -3880,7 +4881,10 @@ end
 
 ------------------------------
 --- Init
-Bot.GetPos_Head = function(self)
+Bot.GetPos_Head = function(self, hCheck)
+	if (hCheck) then
+		return (hCheck.actor:GetHeadPos())
+	end
 	return (g_localActor.actor:GetHeadPos())
 end
 

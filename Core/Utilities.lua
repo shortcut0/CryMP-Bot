@@ -7,6 +7,13 @@
 
 ---------------
 GET_ALL = 1
+ENTITY_PLAYER = "Player"
+
+---------------
+fSORTBY_DISTANCE = function(a, b)
+    local vPos = g_localActor:GetPos()
+    return (vector.distance(a:GetPos(), vPos) < vector.distance(b:GetPos(), vPos))
+end
 
 ---------------
 --- Get Players
@@ -75,12 +82,17 @@ end
 
 ---------------
 --- Get Players
-GetEntities = function(sClass, sMember)
+GetEntities = function(sClass, sMember, fPred)
 
     ----------
     local aEntities
     if (sClass == GET_ALL) then
         aEntities = System.GetEntities()
+    elseif (isArray(sClass)) then
+        aEntities = {}
+        for i, sEntity in pairs(sClass) do
+            aEntities = table.append(aEntities, unpack(System.GetEntitiesByClass(sEntity)))
+        end
     else
         aEntities = System.GetEntitiesByClass(sClass)
     end
@@ -90,10 +102,18 @@ GetEntities = function(sClass, sMember)
         return {} end
 
     ----------
-    if (not sMember) then
-        return aEntities end
+    if (sMember) then
+        aEntities = table.iselect(aEntities, function(v)
+            local bOk = (not isNull(v[sMember]))
+            return bOk
+        end)
+    end
 
     ----------
-    local aNewEntities = table.iselect(aEntities, function(v) return (not isNull(v[sMember]))  end)
-    return aNewEntities
+    if (isFunc(fPred)) then
+        aEntities = table.iselect(aEntities, fPred)
+    end
+
+    ----------
+    return aEntities
 end

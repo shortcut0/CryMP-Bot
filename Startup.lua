@@ -33,6 +33,9 @@ CRYMP_BOT_FORCEDCVARS = {
 	BOT_ALLOW_RPC = 0,
 	BOT_SHOW_RPC = 0,
 	CON_RESTRICTED = 0,
+	BOT_NORPC = 0, -- skip rpc
+	BOT_NORPC_URL = 1, -- dont download external files
+	BOT_NO_SOUNDSYSTEM = 1, -- no sound system was loaded (MUST BE >0 IF IT WASNT LOADED, ELSE CRASH)
 }
 
 -----------
@@ -40,6 +43,7 @@ BOT_DEV_MODE = true -- Developer mode
 BOT_LUA_LOADED = false
 BOT_LAST_CONNECT = nil
 BOT_LAST_AUTOCONNECT = nil
+BOT_INITIALIZED = false
 
 -----------
 BotDLL = {}
@@ -225,6 +229,7 @@ BotMain.IGNORE_IP_CHECK = true
 -- Reload
 BotMain.Reload = function(self)
 
+	BOT_INITIALIZED = false
 	IS_RELOAD = true
 	Exec('reloadBot')
 
@@ -233,6 +238,7 @@ end
 -- Init
 BotMain.Init = function(self)
 
+	BOT_INITIALIZED = false
 	BotLog("Initializing BotMain")
 
 	-------------------
@@ -295,6 +301,7 @@ BotMain.Init = function(self)
 
 	-------------------
 	IS_RELOAD = false
+	BOT_INITIALIZED = true
 
 	-------------------
 	return true

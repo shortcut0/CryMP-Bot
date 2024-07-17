@@ -105,8 +105,11 @@ luautils.random = function(min, max, floor)
 	local iRandom
 	if (max) then
 		iRandom = math.random(min, max)
-	else
+	elseif (min) then
 		iRandom = math.random(0, min)
+	else
+		AILog("NO MINIMUM SPECIFIED %s", debug.traceback())
+		return 0
 	end
 
 	-------------

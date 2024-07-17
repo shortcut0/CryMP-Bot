@@ -383,6 +383,7 @@ end
 -- table.getsize
 
 table.getsize = table.count
+table.size = table.count
 
 ---------------------------
 -- table.countTypes
@@ -909,7 +910,7 @@ table.tostring = function(aArray, sTab, sName, bSubCall)
 			vKey = "[\"" .. tostring(i) .. "\"] = " end
 				
 		if (vType == "table") then
-			sRec = (table.tostring(v, sTab, "[\"" .. i .. "\"] = ", aArray, 1))
+			sRec = (table.tostring(v, sTab, "[\"" .. tostring(i) .. "\"] = ", aArray, 1))
 			if (string.empty(sRec)) then
 				bRec = true
 			else

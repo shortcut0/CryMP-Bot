@@ -63,6 +63,7 @@ eAI_gInCaptureZone = "inCaptureZone"
 
 AISetGlobal = GetDummyFunc()
 AIGetGlobal = GetDummyFunc()
+AIEvent = GetDummyFunc()
 
 -------------------
 -- Init
@@ -75,6 +76,7 @@ BotAI.Init = function(self, bReload)
 
 	AISetGlobal = self.SetGlobal
 	AIGetGlobal = self.GetGlobal
+	AIEvent = self.CallEvent
 
 	------------
 	AILog("BotAI.Init()")
@@ -316,13 +318,37 @@ BotAI.LoadAIModules = function()
 			if (isArray(aEntities)) then
 				AILog("Found Entity Data for Map %s", sMapName)
 				local iPatched = 0
-				for sName, vPos in pairs(aEntities) do
-					local hEntity = System.GetEntityByName(sName)
-					if (hEntity) then
-						hEntity.GetPos = function()
-							return vPos
+				for i, aLocations in pairs(aEntities) do
+
+					local sType = aLocations.Type
+					local aEntities = GetEntities(GET_ALL, nil, function(a)
+						AILog("1")
+						local iDist = vector.distance(a:GetPos(), aLocations.Location)
+						if (iDist > 5) then
+							return false
 						end
+						if (sType ~= nil and not string.match(a.class, sType)) then
+							return false
+						end
+						AILog("in range: %s", a:GetName())
+						return string.match(a:GetName(), aLocations.Name)
+					end)
+
+					local vMoves = aLocations.Move
+					for i, hEntity in pairs(aEntities) do
+						hEntity.GetPos = function()
+							if (vector.isvector(vMoves)) then
+								return vMoves
+							end
+							return getrandom(vMoves)
+						end
+						AILog("Updated position for entitiy %s", hEntity:GetName())
 					end
+
+					AILog("Checking %d", i)
+					--local hEntity = System.GetEntityByName(sName)
+					--if (hEntity) then
+					--end
 				end
 			end
 		end
