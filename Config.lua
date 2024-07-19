@@ -101,13 +101,14 @@ Config = {
 	};
 	
 	-- buy only these items
-	BuyableItems = { ["GaussRifle"] = true, ["DSG1"] = true, ["FY71"] = true, ["SCAR"] = true, ["SMG"] = true, ["Claymore"] = true };
+	BuyableItems = { ["LAW"] = true, ["GaussRifle"] = true, ["DSG1"] = true, ["FY71"] = true, ["SCAR"] = true, ["SMG"] = true, ["Claymore"] = true };
 	
 	-- priority for buyable items
 	BuyPriority = {
 		['GaussRifle'] = 3.1,
 		['DSG1'] = 3.2,
 		['FY71'] = 3.0,
+		['LAW'] = 3.0,
 		['SCAR'] = 2.5,
 		['SMG'] = 1.5,
 		['LAW'] = 0,

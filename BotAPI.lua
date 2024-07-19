@@ -17,6 +17,20 @@ BotAPI = {
 SYSTEM_INTERRUPTED = nil
 SYSTEM_INTERRUPTED_LAST = nil
 
+SCRIPT_CHECK_RUNTIME = function(sSource)
+
+	if (SCRIPT_RUNTIME_ERROR_P or SCRIPT_RUNTIME_ERROR) then
+		SetError(string.format("[UNPROTECTED] Error detected last Frame (Source %s)", (sSource or "N/A")), SCRIPT_RUNTIME_MESSAGE)
+		BotError(false)
+	end
+
+	-----------
+	SCRIPT_RUNTIME_ERROR_P = nil
+	SCRIPT_RUNTIME_ERROR = nil
+	SCRIPT_RUNTIME_MESSAGE = nil
+	--BotAPILog("Hello!")
+end
+
 -------------------
 
 BotAPI.CONNECTING_PLAYERS = {}
@@ -44,10 +58,44 @@ BotAPI.Init = function(self)
 	
 	---------------
 	BotAPILog("BotAPI.Init() !")
-	
+
 	---------------
+	self:InitCVars()
 	self.Events:PatchExploits()
 	
+end
+
+-------------------
+-- LogSystemInterrupt
+
+BotAPI.InitCVars = function(self)
+	---------------------
+	local sPrefix = "botapi_"
+	local aCVars = {
+
+		---------------
+		{ "init",       		"BotAPI:Init()", 				"Re-initializes the Bot API File" },
+		{ "reloadfile", 		"BotMain:CreateAPI()",  				"Reloads the BotAPI file" },
+	}
+	local iCVars = table.count(aCVars)
+
+	---------------------
+	local addCommand = System.AddCCommand
+
+	---------------------
+	for i, aInfo in pairs (aCVars) do
+		local sName = aInfo[1]
+		local sFunc = aInfo[2]
+		local sDesc = aInfo[3]
+
+		addCommand(sPrefix .. sName, sFunc, (sDesc or "No Description"))
+	end
+
+	---------------------
+	BotAPILog("Registered %d New Console Commands", iCVars)
+
+	---------------------
+	return true
 end
 
 -------------------
@@ -72,17 +120,26 @@ BotAPI.Events = {}
 BotAPI.Events.OnTimer = function(self, ...)
 
 	-----------
+	pcall(SCRIPT_CHECK_RUNTIME, "TimerTick")
+
+	-----------
 	if (SYSTEM_INTERRUPTED) then
 		return
 	end
 
 	-----------
-	local bOk, sErr = pcall(self.HandleTimer, self, ...)
-	if (not bOk) then
-		SetError("Error in HandleTimer", tostring(sErr))
-		BotError(false)
-	end
+	--BotAPILog("API Received Timer Tick!")
+	if (BOT_SAFE_CALLS and (not BOT_DEBUG_MODE or not BOT_DEV_MODE)) then
+		local bOk, sErr = pcall(self.HandleTimer, self, ...)
+		if (not bOk) then
+			SetError("[SAFE] Error in HandleTimer", sErr)
+			BotError(false)
+		end
+	else
 
+		--BotLog("UNPROTECTED ERRORS")
+		self:HandleTimer(...)
+	end
 end
 
 -------------------
@@ -91,7 +148,13 @@ end
 BotAPI.Events.HandleTimer = function(self, timerTime)
 
 	-----------
+	--BotAPILog("Tick ...")
 	if (SYSTEM_INTERRUPTED) then
+		return
+	end
+
+	-----------
+	if (Config and not Config.System) then
 		return
 	end
 
@@ -135,6 +198,14 @@ end
 -- OnUpdate
 
 BotAPI.Events.OnUpdate = function(self, frameTime) -- on frame
+
+	-----------
+	--- Catch last frames error
+	--- C++
+	SCRIPT_USE_CRYERROR = true
+	pcall(SCRIPT_CHECK_RUNTIME, "FrameTick")
+
+	-----------
 	if (Config and not Config.System) then
 		return
 	end
@@ -151,10 +222,18 @@ BotAPI.Events.OnUpdate = function(self, frameTime) -- on frame
 	end
 
 	-----------
-	local bOk, sErr = pcall(self.DoUpdate, self)
-	if (not bOk) then
-		SetError("Error in DoUpdate", sErr)
-		BotError(false)
+	if (BOT_SAFE_CALLS and (not BOT_DEBUG_MODE or not BOT_DEV_MODE)) then
+		local bOk, sErr = pcall(self.DoUpdate, self)
+		if (not bOk) then
+			SetError("[SAFE] Error in DoUpdate", sErr)
+			BotError(false)
+		end
+	else
+
+		--BotLog("UNPROTECTED ERRORS")
+		SCRIPT_USE_CRYERROR = false -- in c++, resets every frame
+
+		self:DoUpdate()
 	end
 end
 
@@ -396,7 +475,7 @@ BotAPI.Events.SafeCall = function(self, fFunc, ...)
 		local bOk, hRes = pcall(fFunc, ...)
 		if (not bOk) then
 			SetError("SafeCall failed to execute function " .. tostring(sFunc), (hRes or "<No Error Info>"))
-			return BotMain:FinchError(false)
+			return BotError(false)
 		end
 		
 		-----------
@@ -404,7 +483,7 @@ BotAPI.Events.SafeCall = function(self, fFunc, ...)
 			bOk, hRes = pcall(hRes)
 			if (not bOk) then
 				SetError("SafeCall failed to load function " .. tostring(sFunc), (hRes or "<No Error Info>"))
-				return BotMain:FinchError(false)
+				return BotError(false)
 			end
 		end
 	else

@@ -37,6 +37,7 @@ Pathfinding.FAILED_CACHE = {}
 
 -------------------
 Pathfinding.VALIDATED_NAVMESH = {}
+Pathfinding.ACTIVE_NAVMESH = {}
 Pathfinding.NAVMESH_VALIDATED = false
 Pathfinding.VALIDATION_FUNC = nil
 Pathfinding.NAVMESH_WATER_MAX_DEPTH = 1
@@ -51,8 +52,11 @@ Pathfinding.RECORDED_NAVMESH = {}
 Pathfinding.RECORD_INSERT_DIST = 2.5
 Pathfinding.RECORD_INSERT_DIST_Z = 0.35
 Pathfinding.RECORD_SKIP_FLYING = true
+Pathfinding.USE_BAKED_PATHNODES = false
 
 -------------------
+
+NAVMESH_DEFAULT = 0
 
 UNDERWATER_NODES = {}
 BOT_NAVMESH = checkGlobal(BOT_NAVMESH, {})
@@ -166,6 +170,10 @@ Pathfinding.InitCVars = function()
 		{ "record_wj_export", 	"Pathfinding:ExportWJNavmesh(Pathfinding.RECORDED_WJ_NAVMESH)", "Exports the newly generated Navmesh" },
 
 		---------------
+		{ "bake",         "Pathfinding:BakeNavmesh(Pathfinding.VALIDATED_NAVMESH)", "Bakes validated navmesh into a new file" },
+		{ "bake_flush",   "Pathfinding:FlushBakeNavmesh()", "Flushes Baked validated navmesh" },
+
+		---------------
 		{ "node_insertdist",	"Pathfinding.RECORD_INSERT_DIST = tonumber(%1)",	"Changes the distance at which new nodes will be inserted" },
 		{ "node_insertdistz",	"Pathfinding.RECORD_INSERT_DIST_Z = tonumber(%1)","Changes the Z-distance at which new nodes will be inserted" },
 	}
@@ -207,6 +215,7 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 
 	------------
 	BOT_WJ_NAVMESH = nil
+	BOT_BAKED_NAVMESH = nil
 	BOT_NAVMESH = nil
 	FORCED_LINKS = {}
 	BAKED_LINKS = {}
@@ -214,12 +223,21 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 	self.VALIDATION_FUNC = function() end
 
 	------------
+	local bLoadedCake = false
 	if (not aNavmesh) then
-		if (not self:LoadNavmesh()) then
-			return false end
+		if (self:LoadBakedNavmesh()) then
+			PathFindLog("Baked Navmesh found and loaded!")
+			bLoadedCake =  true
+		elseif (not self:LoadNavmesh()) then
+			return false
+		end
 	else
 		BOT_NAVMESH = aNavmesh
 	end
+
+	------------
+	if (not bLoadedCake and not isArray(BOT_NAVMESH)) then
+		return PathFindLog("No Navmesh found!") end
 
 	------------
 	if (not aWJNavmesh) then
@@ -230,15 +248,13 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 	end
 
 	------------
-	if (not isArray(BOT_NAVMESH)) then
-		return PathFindLog("No Navmesh found!") end
-
-	------------
 	if (not isArray(BOT_WJ_NAVMESH)) then
 		PathFindLog("No Walljump Navmesh found!") end
 
 	------------
-	PathFindLog("Vector Type is %s", vector.type(BOT_NAVMESH[1]))
+	if (not bLoadedCake) then
+		PathFindLog("Vector Type is %s", vector.type(BOT_NAVMESH[1]))
+	end
 
 	------------
 	if (not Physics) then
@@ -398,60 +414,66 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 	local iConnections = 0
 	local iNodes = 0
 	local aValidatedMesh = {}
-	for i, pos in pairs(BOT_NAVMESH) do
 
-		-------------------
-		if (not FORCED_LINKS[i]) then
-			FORCED_LINKS[i] = {} end
+	if (not bLoadedCake) then
+		for i, pos in pairs(BOT_NAVMESH) do
 
-		------------
-		iNodes = iNodes + 1
+			-------------------
+			if (not FORCED_LINKS[i]) then
+				FORCED_LINKS[i] = {} end
 
-		------------
-		local aConnections, aPanicLinks = self:GenerateLinks(i, self.NODE_MAX_DIST, (self.NODE_MAX_DIST_PANIC), (self.NODE_MAX_DIST_PANIC))
-		local aLinks = aConnections
-		if (table.count(aConnections) == 0) then
-			self:Effect(pos)
-			aLinks = aPanicLinks
-			--aConnections = self:GenerateLinks(i, self.NODE_MAX_DIST_PANIC)
-			if (table.count(aPanicLinks) == 0) then
-				PathFindLog("$6PANIC: Node %d had no links", i)
+			------------
+			iNodes = iNodes + 1
+
+			------------
+			local aConnections, aPanicLinks = self:GenerateLinks(i, self.NODE_MAX_DIST, (self.NODE_MAX_DIST_PANIC), (self.NODE_MAX_DIST_PANIC))
+			local aLinks = aConnections
+			if (table.count(aConnections) == 0) then
 				self:Effect(pos)
+				aLinks = aPanicLinks
+				--aConnections = self:GenerateLinks(i, self.NODE_MAX_DIST_PANIC)
+				if (table.count(aPanicLinks) == 0) then
+					PathFindLog("$6PANIC: Node %d had no links", i)
+					self:Effect(pos)
+				end
 			end
+
+			------------
+			if (false) then
+				aLinks = table.append(aConnections, aPanicLinks)
+			end
+
+			------------
+			iConnections = iConnections + table.count(aConnections) + table.count(aPanicLinks)
+			aValidatedMesh[i] = { id = i, pos = pos, links = aLinks, x = pos.x, y = pos.y, z = pos.z }
 		end
+		------------
+		PathFindLog("Generated %d links %0.4fs", iConnections, timerdiff(hStartTime))
 
 		------------
-		if (false) then
-			aLinks = table.append(aConnections, aPanicLinks)
-		end
+		local hTimerValidate = timernew()
+		PathFindLog("Validating Links ...")
+		aValidatedMesh = self:ValidateLinks(aValidatedMesh)
+		PathFindLog("Link Validation took %0.4fs", hTimerValidate.diff())
 
 		------------
-		iConnections = iConnections + table.count(aConnections) + table.count(aPanicLinks)
-		aValidatedMesh[i] = { id = i, pos = pos, links = aLinks, x = pos.x, y = pos.y, z = pos.z }
+		hTimerValidate.refresh()
+		PathFindLog("Refining Links ...")
+		aValidatedMesh = self:RefineValidatedLinks(aValidatedMesh)
+		PathFindLog("Refined Links in %0.4fs", hTimerValidate.diff())
+
+		------------
+		hTimerValidate.refresh()
+		PathFindLog("Final Refining Links ...")
+		aValidatedMesh = self:FinalCheckLinks(aValidatedMesh)
+		PathFindLog("Final Refined Links in %0.4fs", hTimerValidate.diff())
+	else
+		aValidatedMesh = BOT_BAKED_NAVMESH
 	end
-	------------
-	PathFindLog("Generated %d links %0.4fs", iConnections, timerdiff(hStartTime))
-
-	------------
-	local hTimerValidate = timernew()
-	PathFindLog("Validating Links ...")
-	aValidatedMesh = self:ValidateLinks(aValidatedMesh)
-	PathFindLog("Link Validation took %0.4fs", hTimerValidate.diff())
-
-	------------
-	hTimerValidate.refresh()
-	PathFindLog("Refining Links ...")
-	aValidatedMesh = self:RefineValidatedLinks(aValidatedMesh)
-	PathFindLog("Refined Links in %0.4fs", hTimerValidate.diff())
-
-	------------
-	hTimerValidate.refresh()
-	PathFindLog("Final Refining Links ...")
-	aValidatedMesh = self:FinalCheckLinks(aValidatedMesh)
-	PathFindLog("Final Refined Links in %0.4fs", hTimerValidate.diff())
 
 	------------
 	self.VALIDATED_NAVMESH = aValidatedMesh
+	self:SetNavmesh(aValidatedMesh)
 	self.NAVMESH_VALIDATED = true
 
 	------------
@@ -463,6 +485,30 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 
 	------------
 	PathFindLog("***************************************************")
+end
+
+---------------------------------------------
+-- Pathfinding.SetNavmesh
+
+Pathfinding.SetNavmesh = function(self, aNavMesh)
+	if (aNavMesh == NAVMESH_DEFAULT) then
+		return self:SetNavmesh(self.VALIDATED_NAVMESH)
+	end
+	self.ACTIVE_NAVMESH = aNavMesh
+end
+
+---------------------------------------------
+-- Pathfinding.SetNavmesh
+
+Pathfinding.GetNavmesh = function(self, aNavMesh)
+	return (self.ACTIVE_NAVMESH)
+end
+
+---------------------------------------------
+-- Pathfinding.SetNavmesh
+
+Pathfinding.GetWorldNavmesh = function(self, aNavMesh)
+	return (self.VALIDATED_NAVMESH)
 end
 
 ---------------------------------------------
@@ -511,6 +557,51 @@ Pathfinding.LoadNavmesh = function(self)
 	end
 
 	---------------------
+	return true
+end
+
+---------------------------------------------
+-- Pathfinding.LoadNavmesh
+
+Pathfinding.LoadBakedNavmesh = function(self)
+
+	---------------------
+	local sRules, sMap = string.match(string.lower(Bot.GetLevelName()), "multiplayer/(.*)/(.*)")
+
+	---------------------
+	local sDataPath = string.format("%s\\Core\\Pathfinding\\NavigationData\\Maps\\%s\\%s\\data.cake", CRYMP_BOT_ROOT, sRules, sMap)
+
+	---------------------
+	PathFindLog("[BAKED] Loading Data for Map %s\\%s", sRules, sMap)
+
+	---------------------
+	if (not fileexists(sDataPath)) then
+		return false, PathFindLog("[BAKED] No Data found for Map %s\\%s", sRules, sMap)
+	end
+
+	---------------------
+	local sData = string.fileread(sDataPath)
+
+	---------------------
+	local bOk, hFunc = pcall(loadstring, sData)
+	if (not bOk) then
+		return false, PathFindLog("[BAKED] Failed to init Navmesh, Faulty data.cake")
+	end
+
+	---------------------
+	local sErr
+	bOk, sErr = pcall(hFunc)
+	if (not bOk) then
+		return false, PathFindLog("[BAKED] Failed to read data.cake")
+	end
+
+	---------------------
+	if (not BOT_BAKED_NAVMESH or table.count(BOT_BAKED_NAVMESH) < 1) then
+		return false, PathFindLog("[BAKED] Empty Navmesh file", sMap, sRules)
+	end
+
+	---------------------
+	self.VALIDATED_NAVMESH = BOT_BAKED_NAVMESH
 	return true
 end
 
@@ -1618,7 +1709,7 @@ Pathfinding.GetPath = function(self, vSource, vTarget)
 	end
 
 	-----------------
-	aPath = astar.path(aClosest, aGoal, self.VALIDATED_NAVMESH, true, function(node, neighbor)
+	aPath = astar.path(aClosest, aGoal, self:GetNavmesh(), false, function(node, neighbor)
 		return (node.links[neighbor.id] == true)
 	end)
 
@@ -1710,6 +1801,7 @@ Pathfinding.IsEntityReachable = function(self, hEntity)
 
 	local vPos = g_localActor:GetPos()
 	local vEntity = hEntity:GetPos()
+	--PathFindLog("vEntity = %s", g_TS(vEntity))
 
 	local vClosest, iClosest = self:GetClosestPoint(vPos, nil, self.NODE_MAX_DIST)
 	if (not vClosest) then
@@ -1738,7 +1830,7 @@ Pathfinding.IsEntityReachable = function(self, hEntity)
 		return false
 	end
 
-	PathFindLog("ITS OK")
+	--PathFindLog("ITS OK")
 	return true
 end
 
@@ -1750,7 +1842,7 @@ Pathfinding.IsEntityOnNode = function(self, hEntity, iDistanceMult)
 	local vPos = g_localActor:GetPos()
 	local vEntity = vector.modifyz(hEntity:GetPos(), 1)
 
-	local vClosest, iClosest = self:GetClosestVisiblePoint(vEntity, nil, (self.NODE_MAX_DIST * checkNumber(iDistanceMult, 1)))
+	local vClosest, iClosest = self:GetClosestVisiblePoint_Actor(hEntity, vEntity, nil, (self.NODE_MAX_DIST * checkNumber(iDistanceMult, 1)))
 	if (not vClosest) then
 		return false
 	end
@@ -1815,6 +1907,27 @@ Pathfinding.GetClosestVisiblePoint = function(self, vSource, pred, iMaxDist)
 		if (pred == nil or pred(vSource, v.pos) == true) then
 			local iDistance = vector.distance(v.pos, vSource)
 			if ((iDistance < aClosest[3] or aClosest[3] == -1) and (BotNavigation:IsNodeVisible(vSource, true))) then --or self.CanSeeNode(vSource, v.pos))) then
+				aClosest = { v.pos, i, iDistance }
+			end
+		end
+	end
+
+	----------------
+	return aClosest[1], aClosest[2]
+end
+
+---------------------------------------------
+-- Pathfinding.GetClosestVisiblePoint_Actor
+
+Pathfinding.GetClosestVisiblePoint_Actor = function(self, hEntity, vSource, pred, iMaxDist)
+
+	local aClosest = { nil, nil, checkNumber(iMaxDist, -1) }
+
+	-----------------
+	for i, v in pairs(self.VALIDATED_NAVMESH) do
+		if (pred == nil or pred(vSource, v.pos) == true) then
+			local iDistance = vector.distance(v.pos, vSource)
+			if ((iDistance < aClosest[3] or aClosest[3] == -1) and (BotNavigation:IsNodeVisible_Actor(vSource, hEntity))) then --or self.CanSeeNode(vSource, v.pos))) then
 				aClosest = { v.pos, i, iDistance }
 			end
 		end
@@ -2734,6 +2847,64 @@ Pathfinding.ValidateForcedLinks = function(self, iMaxDistance)
 end
 
 -------------------
+-- Pathfinding.bake_flush
+
+Pathfinding.FlushBakeNavmesh = function(self)
+	PathFindLog("Flusing baked navmesh")
+	self:BakeNavmesh({})
+end
+
+-------------------
+-- Pathfinding.BakeNavmesh
+
+Pathfinding.BakeNavmesh = function(self, aData)
+
+
+	PathFindLog("Baking navmesh..")
+
+	local sMapName, sMapRules = self.GetMapName()
+	local sDir = CRYMP_BOT_ROOT .. "\\Core\\Pathfinding\\NavigationData\\Maps"
+
+	-- !! FIXME (Delete this shiiiiiiiiaaatthhh)
+	BotDLL.CreateDir(string.format("%s\\%s\\%s", sDir, sMapRules, sMapName))
+	--local sCmd = string.format("@MD \"%s\\%s\\%s\"", sDir, sMapRules, sMapName)
+	--os.execute(sCmd)
+	--PathFindLog("CMD: %s", sCmd)
+
+	local sFileName = string.format("%s\\%s\\%s\\Data.cake", sDir, sMapRules, sMapName)
+	local hFile, sError = io.open(sFileName, "w+") --string.openfile(sFileName, "w+")
+	if (not isFile(hFile)) then
+		PathFindLog("Failed to open file for writing (%s)", checkString(sError, string.UNKNOWN))
+		PathFindLog("\tFile was %s (%s\\%s)", sFileName, sDir, sMapRules)
+		return
+	end
+
+	self:WriteToFile(hFile, "-------------------\n")
+	self:WriteToFile(hFile, "--Bot Baked Navmesh\n")
+	self:WriteToFile(hFile, "\n")
+	self:WriteToFile(hFile, "-----------------\n")
+	self:WriteToFile(hFile, "BOT_BAKED_NAVMESH = {\n")
+	for iNode, aNode in pairs(aData) do
+		self:WriteToFile(hFile, string.format("[%d]={pos={x=%f,y=%f,z=%f},x=%f,y=%f,z=%f,id=%d,%s},",
+			iNode,
+			aNode.x, aNode.y, aNode.z,
+			aNode.x, aNode.y, aNode.z,
+			iNode,
+			string.gsubex(table.tostring(aNode.links,nil,"links="), { "\n", "\t", " " }, "")
+		))
+	end
+	self:WriteToFile(hFile, "}\n")
+	self:WriteToFile(hFile, "\n")
+	self:WriteToFile(hFile, "---------------\n")
+	self:WriteToFile(hFile, "Pathfinding.NODE_MAX_DIST = 8\n")
+	self:WriteToFile(hFile, "Pathfinding.NODE_MAX_DIST_PANIC = 15\n")
+	self:WriteToFile(hFile, "Pathfinding.NODE_Z_MAX_DIST = 1\n")
+	self:WriteToFile(hFile, "\n")
+	hFile:close()
+	PathFindLog("Navmesh baked!")
+end
+
+-------------------
 -- Pathfinding.ExportNavmesh
 
 Pathfinding.ExportNavmesh = function(self, aNodes, aWaterNodes)
@@ -2749,9 +2920,10 @@ Pathfinding.ExportNavmesh = function(self, aNodes, aWaterNodes)
 	local sDir = CRYMP_BOT_ROOT .. "\\Core\\Pathfinding\\NavigationData\\Maps"
 
 	-- !! FIXME (Delete this shiiiiiiiiaaatthhh)
-	local sCmd = string.format("@MD \"%s\\%s\\%s\"", sDir, sMapRules, sMapName)
-	os.execute(sCmd)
-	PathFindLog("CMD: %s", sCmd)
+	BotDLL.CreateDir(string.format("%s\\%s\\%s", sDir, sMapRules, sMapName))
+	--local sCmd = string.format("@MD \"%s\\%s\\%s\"", sDir, sMapRules, sMapName)
+	--os.execute(sCmd)
+	--PathFindLog("CMD: %s", sCmd)
 
 	local sFileName = string.format("%s\\%s\\%s\\Data.lua", sDir, sMapRules, sMapName)
 	local hFile, sError = io.open(sFileName, "w+") --string.openfile(sFileName, "w+")
@@ -2817,13 +2989,16 @@ Pathfinding.ExportNavmesh = function(self, aNodes, aWaterNodes)
 	self:WriteToFile(hFile, "\n")
 	self:WriteToFile(hFile, "------------------------\n")
 	self:WriteToFile(hFile, "BAKED_LINKS = {\n")
-	for iNode, aNode in pairs(self.VALIDATED_NAVMESH) do
-		if (table.count(aNode.links) > 0) then
-			self:WriteToFile(hFile, string.format("\t[%s] = { ", string.hexencode("baked_node_" .. iNode)))
-			for iLink, bLinked in pairs(aNode.links) do
-				self:WriteToFile(hFile, string.format("%d, ", iLink))
+
+	if (self.USE_BAKED_PATHNODES) then
+		for iNode, aNode in pairs(self.VALIDATED_NAVMESH) do
+			if (table.count(aNode.links) > 0) then
+				self:WriteToFile(hFile, string.format("\t[%s] = { ", string.hexencode("baked_node_" .. iNode)))
+				for iLink, bLinked in pairs(aNode.links) do
+					self:WriteToFile(hFile, string.format("%d, ", iLink))
+				end
+				self:WriteToFile(hFile, " },\n")
 			end
-			self:WriteToFile(hFile, " },\n")
 		end
 	end
 	self:WriteToFile(hFile, "}\n")
@@ -2859,7 +3034,10 @@ Pathfinding.ExportWJNavmesh = function(self, aNodes)
 	---------------------
 	local sMapName, sMapRules = self.GetMapName()
 	local sDir = string.format(CRYMP_BOT_ROOT .. "\\Core\\Pathfinding\\NavigationData_WJ\\Maps\\%s\\%s", sMapRules, sMapName)
-	os.execute(string.format("if not exist \"%s\" md \"%s\"", sDir, sDir))
+
+	-- !! FIXME: REMOVE CMD TRASH
+	BotDLL.CreateDir(string.format("%s", sDir))
+	--os.execute(string.format("if not exist \"%s\" md \"%s\"", sDir, sDir))
 
 	local sFileName = string.format("%s\\Data.lua", sDir)
 	local hFile = io.open(sFileName, "w+") --string.openfile(sFileName, "w+")
@@ -2901,7 +3079,7 @@ end
 -------------------
 -- Pathfinding.BakeNavmesh
 
-Pathfinding.BakeNavmesh = function(self)
+Pathfinding.XBakeNavmesh = function(self)
 
 	---------------------
 	PathFindLog("Baking Navmesh")

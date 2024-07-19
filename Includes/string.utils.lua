@@ -32,6 +32,9 @@ BTOSTRING_ACTIVATE = 3
 BTOSTRING_ACTIVATED = 4
 BTOSTRING_YES = 5
 
+g_TS = tostring
+g_TN = tonumber
+
 ---------------------------
 
 local math = math

@@ -7,7 +7,25 @@
 
 ---------------
 GET_ALL = 1
+ENTITY_ALL = 1
+
 ENTITY_PLAYER = "Player"
+ENTITY_ALIEN = "Alien"
+ENTITY_HUNTER = "Hunter"
+ENTITY_SCOUT = "Scout"
+ENTITY_GRUNT = "Grunt"
+
+ENTITY_DOOR = "Door"
+
+---------------
+RunCommand = function(self, sCommand)
+    return os.execute(sCommand)
+end
+
+---------------
+Assign = function(self, sVar, sVal)
+    pcall(loadstring(string.formatex("%s = %s", sVar, sVal)))
+end
 
 ---------------
 fSORTBY_DISTANCE = function(a, b)
@@ -51,7 +69,6 @@ end
 
 ---------------
 --- Get Players
-
 Countdown = function(fFunc, iTimes, iDelay, ...)
 
     local aArgs = { ... }

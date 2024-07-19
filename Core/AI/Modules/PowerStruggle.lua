@@ -12,6 +12,8 @@ BotAI:CreateAIModule("PowerStruggle", {
 	CURRENT_CONTESTED_TARGET = nil,
 	CURRENT_ATTENTION_TARGET = nil,
 
+	INSIDE_CAPTURE_AREA = nil,
+
 	----------
 	ModuleFullName = nil,
 	ModuleName = nil,
@@ -39,7 +41,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			
 			self:Init()
 		end,
-	
+
 		------------------------------
 		-- OnTimer
 		OnTimer = function(self, iFrameTime)
@@ -48,22 +50,166 @@ BotAI:CreateAIModule("PowerStruggle", {
 			----------------
 			self:OnTimer(iFrameTime)
 		end,
-	
+
 		------------------------------
 		-- GetPathGoal
-		
+
 		GetPathGoal = function(self, hRandomEntity)
 			self:AILog(0, "%s.Events.GetPathGoal()", self.ModuleFullName)
-			
+
 			return self:GetAttentionPoint()
 		end,
-	
+
+		------------------------------
+		-- GetPathGoal
+
+		PathGoalReached = function(self)
+			self:AILog(0, "%s.Events.PathGoalReached()", self.ModuleFullName)
+
+			self.LAST_RESORT_TARGET = nil
+			return self:GetAttentionPoint()
+		end,
+
+		------------------------------
+		-- OnEnterVehicleSeat
+		OnEnterVehicleSeat = function(self, hVehicle, aSeat, hUser)
+			local hOurVehicle = Bot:GetVehicle()
+			if (hOurVehicle and hOurVehicle.id == hVehicle.id) then
+			end
+		end,
+
+		------------------------------
+		-- OnLeaveVehicleSeat
+		OnLeaveVehicleSeat = function(self, hVehicle, aSeat, hUser, bExiting)
+			local hOurVehicle = Bot:GetVehicle()
+			if (bExiting and hOurVehicle and hOurVehicle.id == hVehicle.id) then
+				hUser.VAN_ABANDON_TIMER = timerinit()
+			end
+		end,
+
+		------------------------------
+		-- ProcessInVehicle
+		ProcessInVehicle = function(self, hVehicle)
+
+			if (not timerexpired(Bot.VEHICLE_INVITE_TIMEOUT, 8)) then
+				AILog("timeout..")
+				return AIEVENT_OK
+			end
+
+			local vPos = Bot:GetPos()
+			local aFriendlies = GetEntities(ENTITY_PLAYER, nil, function(hPlayer)
+
+				local bOk = true
+				if (not Bot:IsTarget_SameTeam(hPlayer)) then
+					bOk = false
+				end
+				if (not Bot:IsAlive(hPlayer)) then
+					bOk = false
+				end
+				if (Bot:GetVehicle(hPlayer)) then
+					bOk = false
+				end
+				local iDistance = vector.distance(hPlayer:GetPos(), vPos)
+				if (iDistance > 25) then
+					bOk = false
+				end
+
+				if (not timerexpired(hPlayer.VAN_INVITATION_TIMER, 25)) then
+					bOk = false
+				end
+
+				if (not timerexpired(hPlayer.VAN_ABANDON_TIMER, 120)) then
+					bOk = false
+				end
+
+				------
+				--- pick up only if NEAR a spawn or out in the wilderness ??
+				local hClosestAny = self:GetRandomBuilding(BUILDING_ANY)
+
+				------
+				if (bOk) then
+					hPlayer.VAN_INVITATION = true
+				else
+					return false
+				end
+				return true
+			end)
+
+			if (table.count(aFriendlies) > 0) then
+
+				local hInviteTimer = Bot.VEHICLE_INVITE_FRIENDLIES
+				if (not hInviteTimer or not hInviteTimer.expired()) then
+
+
+					if (timerexpired(self.LAST_RADIO_TIMER, 4)) then
+						self:SendRadio(RADIO_GET_IN, 5)
+					end
+
+					AILog("INVITING !!")
+
+					Bot.VEHICLE_INVITE_FRIENDLIES = checkVar(hInviteTimer, timernew(10))
+					return AIEVENT_ABORT -- wait for friendlies
+				else
+
+					Bot.VEHICLE_INVITE_FRIENDLIES = nil
+					Bot.VEHICLE_INVITE_TIMEOUT = timerinit()
+				end
+			end
+
+			AILog("No friendlies!!s")
+			return AIEVENT_OK
+		end,
+
+		------------------------------
+		-- LeaveVehicleForTarget
+		LeaveVehicleForTarget = function(self, hVehicle, vGoal)
+
+			-- AIEVENT_ABORT means to abort the action for whatever called this function
+			-- AIEVENT_OK means to proceed with the action
+
+			if (not hVehicle) then
+				return AIEVENT_OK -- Ok to LEAVE!
+			end
+
+			local aWeapons = Bot:GetVehicleWeapons()
+			if (not isArray(aWeapons)) then
+				return AIEVENT_OK -- Ok to LEAVE
+			end
+
+			local bAnyOk = true -- check ammo of each weapon (not yet)
+			local hCurrent_Self = self.CURRENT_ATTENTION_TARGET
+			local hCurrent_Cont = self.CURRENT_CONTESTED_TARGET
+			local hCurrent_Navi = BotNavigation:GetTarget()
+
+			if (hCurrent_Self ~= nil and hCurrent_Navi == hCurrent_Self and not hCurrent_Cont) then
+
+
+				-- ?? But we have GUNS !!
+				local aContestants = self:GetBuildingContestants(hCurrent_Self)
+				if (table.count(aContestants) > 0) then
+					--AILog("BAD! theres contestants!")
+					--return AIEVENT_OK -- Ok to LEAVE
+				end
+
+				if (checkFunc(hCurrent_Self.IsType, true, hCurrent_Self, BUILDING_SPAWN, BUILDING_ALIEN)) then
+					AILog("Its a spawn or alien site, we're in a vehicle!!")
+					return AIEVENT_ABORT -- dont LEAVE
+				end
+			end
+
+			return AIEVENT_OK -- Ok to LEAVE
+		end,
+
 		------------------------------
 		-- OkInVehicle
 		OkInVehicle = function(self, hVehicle)
 
 			-- true means we can stay
 			-- false to leave (always)
+
+			--if (BotAI.CallEvent("LeaveVehicleForTarget", hVehicle) == AIEVENT_ABORT) then
+			--	return true, AILog("STAYING !!!!!!!!!!")
+			--end
 
 			local vPos = g_localActor:GetPos()
 			local hCurr = self.CURRENT_ATTENTION_TARGET
@@ -254,7 +400,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 	------------------------------
 	-- SendRadio
 		
-	SendRadio = function(self, iRadio)
+	SendRadio = function(self, iRadio, iTimer)
 		self:AILog(0, "%s.iRadio()", self.ModuleFullName)
 			
 		----------------
@@ -270,8 +416,8 @@ BotAI:CreateAIModule("PowerStruggle", {
 			return end
 			
 		----------------
-		local iExpire = 30
-		if (iRadio == self.LAST_RADIO_ID) then
+		local iExpire = checkNumber(iTimer, 30)
+		if (iRadio == self.LAST_RADIO_ID and isNull(iTimer)) then
 			self.RADIO_EXPIRE_TIME = checkNumber(self.RADIO_EXPIRE_TIME, getrandom(60, 120))
 			iExpire = self.RADIO_EXPIRE_TIME end
 		
@@ -512,7 +658,17 @@ BotAI:CreateAIModule("PowerStruggle", {
 		
 		----------------
 		local AIModule = self
-		
+
+		----------------
+		g_gameRules.OnEnterVehicleSeat = function(self, hVehicle, aSeat, idPassenger)
+			AIEvent("OnEnterVehicleSeat", hVehicle, aSeat, GetEntity(idPassenger))
+		end
+
+		----------------
+		g_gameRules.OnLeaveVehicleSeat = function(self, hVehicle, aSeat, idPassenger, bExiting)
+			AIEvent("OnLeaveVehicleSeat", hVehicle, aSeat, GetEntity(idPassenger), bExiting)
+		end
+
 		----------------
 		g_gameRules.Client.ClEnterCaptureArea = function(self, idBuilding, bEnter)
 			AIModule:OnEnterCaptureArea(idBuilding, bEnter)
@@ -636,6 +792,10 @@ BotAI:CreateAIModule("PowerStruggle", {
 				----------
 				table.insert(self.BUILDINGS[sBuildingType], hEntity)
 			end
+
+			hEntity.IsType = function(self, ...)
+				return (string.matchany(self.BUILDING_TYPE, ...))
+			end
 		end
 		
 		---------
@@ -669,8 +829,13 @@ BotAI:CreateAIModule("PowerStruggle", {
 		self:AILog(0, "%s.GetAttentionPoint()", self.ModuleFullName)
 
 		-----
-		local hTarget, bIsContestant = self:PostGetAttentionPoint()
+		local hTarget, bIsContestant, bLastResort = self:PostGetAttentionPoint()
 		local hCurrent = self.CURRENT_ATTENTION_TARGET
+		local hNavTarget = BotNavigation.CURRENT_PATH_TARGET
+
+		local bResetNavi
+		local iNaviSleep
+
 		if (hTarget) then
 			if (hTarget == 0xBEEF) then
 				self:AILog(0, "Got 0xBEEF as attention target!")
@@ -691,12 +856,21 @@ BotAI:CreateAIModule("PowerStruggle", {
 				return
 			end
 
-			if (hCurrent and (hCurrent ~= hTarget or hTarget ~= BotNavigation.CURRENT_PATH_TARGET)) then
-				BotNavigation:ResetPathData()
+			local bTargetIsContestant = (bIsContestant and hTarget == self.CURRENT_CONTESTED_TARGET)
+			AILog("Target is contestant: %s (%s)", tostring(bIsContestant),tostring(bTargetIsContestant))
+			AILog("hCurrent = %s, Target = %s, CPT = %s", tostring(hCurrent), tostring(hTarget), tostring(BotNavigation.CURRENT_PATH_TARGET))
+
+			if (hNavTarget) then
+				AILog(hNavTarget:GetName())
+			end
+
+
+			if (not bTargetIsContestant and hCurrent and (hCurrent ~= hTarget or (hNavTarget ~= nil and hTarget ~= hNavTarget))) then
+				bResetNavi = true
 				AILog("reset data, target changed")
 			end
 
-			self:AILog(0, "Target ok")
+			self:AILog(0, "Target ok (%s)", hTarget:GetName())
 			if (self.PRONING) then
 				Bot:StopProne()
 				self.PRONING = false
@@ -715,19 +889,42 @@ BotAI:CreateAIModule("PowerStruggle", {
 			self.CURRENT_CONTESTED_TARGET = nil
 			
 			-- Experimental (refresh everything now and then)
-			 BotNavigation:ResetPathData() -- Causes massive lag spikes !! oww
-			-- ~...
+			bResetNavi = true
 		end
-		
+
+		-----
+		local aLocalData = self:GetLocalNavmesh()
+		if (aLocalData) then
+			Pathfinding:SetNavmesh(aLocalData)
+		else
+			Pathfinding:SetNavmesh(NAVMESH_DEFAULT)
+		end
+
+		-----
+		if (not bLastResort) then
+			self.LAST_RESORT_TARGET = nil
+		end
+
+		-----
 		if (not timerexpired(self.LAST_ITEMS_BOUGHT_TIMER, 0.5)) then
 			if (not hTarget or not self:IsContested(hTarget)) then
 				self:AILog(0, "We're still buying equipment !")
-				BotNavigation:ResetPath()
-				BotNavigation:SetSleepTimer(0.5)
-				return
+
+				bResetNavi = true
+				iNaviSleep = 0.5
 			end
 		end
 
+		-----
+		if (bResetNavi) then
+			BotNavigation:ResetPath()
+		end
+		if (iNaviSleep) then
+			BotNavigation:SetSleepTimer(0.5)
+		end
+
+		-----
+		--AILog("Final target: %s", hTarget:GetName())
 		return hTarget
 	end,
 	
@@ -741,9 +938,69 @@ BotAI:CreateAIModule("PowerStruggle", {
 		if (not hBuilding) then
 			return false end
 
-		return (self.CONTESTED_FACTORIES[hBuilding.id] == true)
+		return (self.CONTESTED_FACTORIES[hBuilding.id] == true and (self:GetBuildingContestants_Greedy(hBuilding)))
 	end,
 	
+	-----------------
+	GetLocalNavmesh = function(self)
+
+		self:AILog(0, "%s.GetLocalNavmesh()", self.ModuleFullName)
+
+		local aWORLD = Pathfinding:GetWorldNavmesh()
+		if (table.count(aWORLD) == 0) then
+			return AILog("No world Navmesh found!!")
+		end
+
+		local aLOCALIZED = {}
+
+		local vPos = Bot:GetPos()
+		local hCurrent = self.CURRENT_ATTENTION_TARGET
+		local hContestant = self.CURRENT_CONTESTED_TARGET
+		local bIndoors = Bot:IsIndoors()
+		local bUnderground = Bot:IsUnderground()
+
+		----------
+		--- IF indoors (a building) and in a capture radius
+		--- Use local navmesh (only nearby nodes)
+
+		local hTarget = (hContestant or hCurrent)
+		if (hTarget) then
+
+			local vCurrent = hTarget:GetPos()
+			local bCurrentIsAlien = (hTarget.BUILDING_TYPE == BUILDING_ALIEN)
+			local iCurrentDistance = vector.distance(vPos, vCurrent)
+
+			if ((bIndoors or bCurrentIsAlien) and not bUnderground) then
+				AILog("[LocalNavmesh] Indoors and not in tunnels OR at aliens")
+				AILog("Distance to current target: %f", iCurrentDistance)
+				AILog("Target is indoors: %s", string.bool(Bot:IsIndoors(vector.modifyz(vCurrent, 0.5))))
+				AILog("Target is %s", hTarget:GetName())
+
+				if (
+					(iCurrentDistance < 60)
+					and (Bot:IsIndoors(vector.modifyz(vCurrent, 0.5)))
+				) then
+					for iNode, aNode in pairs(aWORLD) do
+						if (vector.distance(aNode.pos, vPos) < 120) then
+							table.insert(aLOCALIZED, aNode)
+						end
+					end
+
+					local iLOCALIZED = table.count(aLOCALIZED)
+					if (iLOCALIZED == 0) then
+						AILog("Somehow local navmesh is null !!!")
+						return aLOCALIZED
+					end
+
+					AILog("Local navmesh generated with %d nodes", iLOCALIZED)
+					return aLOCALIZED
+				else
+					AILog("Target too far or outdoors!")
+				end
+			end
+		end
+	end,
+
 	-----------------
 	PostGetAttentionPoint = function(self)
 		self:AILog(0, "%s.PostGetAttentionPoint()", self.ModuleFullName)
@@ -780,6 +1037,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local iProtoRange = 175
 		local iProtoDistance = vector.distance(vPos, vProto)
 		local bInProtoArea = (iProtoDistance < (iProtoRange * 1.25))
+		local bNearDoors = (not table.empty(GetEntities(ENTITY_DOOR, nil, function(hDoor) return (vector.distance(hDoor:GetPos(), vPos) < 15) end)))
 
 		----
 		local hInside = self.INSIDE_CAPTURE_AREA
@@ -808,6 +1066,9 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local hClosestAny = self:GetUncapturedBuilding(BUILDING_ANY, vPos, 99999)
 
 		----
+		local hAnyBuilding = self:GetRandomBuilding(hCurrent)
+
+		----
 		--AILog("Closest alien: %s %f", hClosestAlien:GetName(), vector.distance(hClosestAlien:GetPos(),vPos))
 
 		----
@@ -830,6 +1091,10 @@ BotAI:CreateAIModule("PowerStruggle", {
 					return false
 				end
 
+				if (Bot:IsDead(hPlayer) or Bot:IsSpectating(hPlayer)) then
+					return
+				end
+
 				if (Bot:IsTarget_SameTeam(hPlayer)) then
 					AILog("same team? %s", hPlayer:GetName())
 					return false
@@ -846,7 +1111,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 					return false
 				end
 
-				if (not Pathfinding:IsEntityOnNode(hPlayer, 35) and not Pathfinding:GetClosestVisiblePoint(vPlayer, nil, 30)) then
+				if (not Pathfinding:IsEntityOnNode(hPlayer, 35) or not Pathfinding:GetClosestVisiblePoint_Actor(hPlayer, vPlayer, nil, 30)) then
 					AILog("not on node or ss of reach")
 					return false
 				end
@@ -856,15 +1121,15 @@ BotAI:CreateAIModule("PowerStruggle", {
 			end)
 
 			if (table.empty(aProtoEnemies)) then return end
-			if (table.count(aProtoEnemies) == 1) then return aProtoEnemies[1] end
+			if (table.count(aProtoEnemies) == 1) then return aProtoEnemies[1], true end
 			table.sort(aProtoEnemies, fSORTBY_DISTANCE)
 
-			return aProtoEnemies[1]
+			return aProtoEnemies[1], true
 		end
 
 		local function fCheckProtoContestants()
 
-			local hPotential
+			local hPotential, bIsTarget
 			if (bProtoContested) then
 				AILog("proto is contested, going there NOW.")
 				hPotential = hProto
@@ -875,15 +1140,21 @@ BotAI:CreateAIModule("PowerStruggle", {
 				AILog("contested building in proto area!")
 				hPotential = hAnyContested
 			elseif (bInProtoArea) then
-				hPotential = fCheckProtoArea()
+				hPotential, bIsTarget = fCheckProtoArea()
 			end
 
-			return hPotential
+			return hPotential, bIsTarget
 		end
 
 		----
 		local hPotential, iPotentialDistance
 		local bPotentialIsPlayer
+
+		----
+		local bCurrentAwayFromDoors = true -- are we close to doors?? (and make sure target isnt near doors as well, else GOTO SPAM AND ROTATING!!)
+		local bCurrentInProtoArea
+		local bCurrentIsAlien
+		local bOutdoors = (not Bot:IsIndoors())
 
 		----
 		if (hCurrent) then
@@ -894,24 +1165,45 @@ BotAI:CreateAIModule("PowerStruggle", {
 			bCurrentContested = self:IsContested(hCurrent)
 			bCapturingAny = self:IsInCaptureRadius(hCurrent)
 			bCurrentInProtoArea = (vector.distance(vCurrent, vProto) < (iProtoRange * 1.25))
+			bCurrentIsAlien = (hCurrent.BUILDING_TYPE == BUILDING_ALIEN)
+
+			if (bNearDoors) then
+				AILog("we're near doors!")
+				bCurrentAwayFromDoors = table.empty(GetEntities(ENTITY_DOOR, nil, function(hDoor) AILog(vector.distance(hDoor:GetPos(), vCurrent)) return (vector.distance(hDoor:GetPos(), vCurrent) < 10) end))
+			end
+
+
+
+			------
+			AILog("Nearby doors: $4%s", string.bool(bCurrentAwayFromDoors))
+			if (not bCurrentAwayFromDoors) then
+
+			end
+
 
 			------
 			AILog("Checking current target %s", hCurrent:GetName())
-			AILog("distance = %f (any = <%f> << %f)", iCurrentDistance, iDistanceClosestAny, (iCurrentDistance / 5))
 
 			------
-			if (not bInProtoArea and ((iDistanceClosestAny < 15 or iDistanceClosestAny < (iCurrentDistance / 5)))) then
-				AILog("uncaptured building at least 5 times closer was found!")
-				return hClosestAny
-			elseif (bInProtoArea and bClosestAnyInProtoArea and not bCurrentInProtoArea and iDistanceClosestAny < 100) then
-				AILog("better building found")
-				return hClosestAny
+			if (hClosestAny) then
+				AILog("[hClosestAny] distance = %f (any = <%f> << %f)", iCurrentDistance, iDistanceClosestAny, (iCurrentDistance / 5))
+				if (not bInProtoArea and (iDistanceClosestAny and (iDistanceClosestAny < 15 or iDistanceClosestAny < (iCurrentDistance / 5)))) then
+					AILog("uncaptured building at least 5 times closer was found!")
+					return hClosestAny
+				elseif (bInProtoArea and bClosestAnyInProtoArea and not bCurrentInProtoArea and iDistanceClosestAny < 100) then
+					AILog("better building found")
+					return hClosestAny
+				end
 			end
 
 			------
 			if (bCurrentInCaptureRadius and not bCurrentCaptured) then
 
 				if (not bCurrentContested) then
+					if ((bNearDoors and bCurrentAwayFromDoors) or (bOutdoors and not bCurrentIsAlien)) then
+						AILog("Getting AWAY from doors!!")
+						return hCurrent
+					end
 					AILog("Already at target! capturing ..")
 					return (0xBEEF)
 				end
@@ -928,6 +1220,11 @@ BotAI:CreateAIModule("PowerStruggle", {
 				end
 
 				AILog("failed")
+				if (self.CURRENT_CONTESTED_TARGET) then
+					if (self.CURRENT_ATTENTION_TARGET) then
+						return self.CURRENT_ATTENTION_TARGET
+					end
+				end
 				return (0xBEEF)
 
 				------
@@ -991,7 +1288,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 
 			AILog("Proto and surrounding OK")
 
-			hPotential = fCheckProtoContestants()
+			hPotential, bPotentialIsPlayer = fCheckProtoContestants()
 
 			if (hPotential) then
 				iPotentialDistance = vector.distance(hPotential:GetPos(), vPos)
@@ -1001,7 +1298,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			if (hPotential and (not bCapturingAny or (iCurrentDistance > iPotentialDistance))) then
 
 				AILog("proto area in danger and current task not worth it")
-				return hPotential
+				return hPotential, bPotentialIsPlayer
 			else
 				AILog("ignoring proto area, we're BUSY AF")
 			end
@@ -1009,7 +1306,16 @@ BotAI:CreateAIModule("PowerStruggle", {
 		
 		---------
 		AILog("[IMPLEMMETATION MISSING, USING ANY BUILDING]")
-		return hClosestAny
+		if (hClosestAny) then
+			return hClosestAny
+		end
+
+
+		-- LAST RESORT !!
+		if (hAnyBuilding) then
+			self.LAST_RESORT_TARGET = checkVar(self.LAST_RESORT_TARGET, hAnyBuilding)
+			return self.LAST_RESORT_TARGET, nil, true
+		end
 	end,
 	
 	-----------------
@@ -1058,6 +1364,33 @@ BotAI:CreateAIModule("PowerStruggle", {
 	end,
 
 	-----------------
+	GetBuildingContestants_Greedy = function(self, hBuilding)
+
+		local iCaptureRadius = 40
+		local vPos = hBuilding:GetPos()
+
+		local aPlayers = GetEntities(ENTITY_PLAYER, nil, function(hPlayer)
+			if (hPlayer.id == g_localActorId or Bot:IsTarget_SameTeam(hPlayer) or hPlayer:IsDead()) then
+				return false
+			end
+
+			local iDist = vector.distance(hPlayer:GetPos(), vPos)
+			if (iDist > iCaptureRadius) then
+				return false
+			end
+
+			return true
+		end)
+
+		if (table.empty(aPlayers)) then return end
+		if (table.count(aPlayers) == 1) then return aPlayers end
+		table.sort(aPlayers, fSORTBY_DISTANCE)
+
+		return aPlayers
+
+	end,
+
+	-----------------
 	GetRadioForBuilding = function(self, hBuilding)
 		local sType = hBuilding.BUILDING_TYPE
 		if (sType == "prototype") then
@@ -1074,31 +1407,9 @@ BotAI:CreateAIModule("PowerStruggle", {
 		
 		---------
 		local vPos = g_localActor:GetPos()
-		
-		---------
-		local fPred = nil
-		if (not isNull(hExcept)) then
-			fPred = function(a)
-				return (a.id ~= hExcept.id) end
-		end
-		
-		---------
 		local aBuildings = self:GetBuildingsOfType(GET_ALL, vPos)
 		if (table.count(aBuildings) > 0) then
-			if (not isFunc(fPredEx)) then
-				return getrandom(aBuildings, fPred)
-			else
-				local aOk = {}
-				for i, hBuilding in pairs(aBuildings) do
-					if (fPredEx(hBuilding) == true) then
-						table.insert(aOk, hBuilding)
-					end
-				end
-				if (table.empty(aOk)) then
-					return
-				end
-				return getrandom(aOk, fPred)
-			end
+			return getrandom(aBuildings)
 		end
 			
 		---------
@@ -1106,13 +1417,26 @@ BotAI:CreateAIModule("PowerStruggle", {
 	end,
 	
 	-----------------
-	IsCapturing = function(self, hEntity)
-	
+	IsCapturing = function(self, hCheck)
+
 		----------
+		local hInside = self.INSIDE_CAPTURE_AREA
+		if (not hInside) then
+			return false
+		end
+
+		if (hCheck) then
+			return (hInside == hCheck)
+		end
+
+		return true
+
+		--[[
 		if (not hEntity) then
 			return (not isNull(self.INSIDE_CAPTURE_AREA))
 		else
-			return (vector.distance(hEntity:GetPos(), g_localActor:GetPos()) < 5) end
+			return (vector.distance(hEntity:GetPos(), g_localActor:GetPos()) < 5)
+		end
 	
 		----------
 		if (isNull(self.INSIDE_CAPTURE_AREA)) then
@@ -1121,7 +1445,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 	
 		----------
 		self:AILog(0, "Capture Area Id: %s", tostring(self.INSIDE_CAPTURE_AREA.id))
-		return (self.INSIDE_CAPTURE_AREA.id == hEntity.id)
+		return (self.INSIDE_CAPTURE_AREA.id == hEntity.id)]]
 	end,
 	
 	-----------------
@@ -1134,7 +1458,8 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local hEntity = checkVar(GetEntity(hEntity), g_localActor)
 		if (hEntity == g_localActor) then
 			self:AILog(0, "local actor check!")
-			return self:IsCapturing(hBuilding) end
+			return self:IsCapturing(hBuilding)
+		end
 	
 		----------
 		self:AILog(0, "CANNOT PROPERLY DETERMINE IF OTHER ENTITIES ARE IN CAPTURE AREA YET !")

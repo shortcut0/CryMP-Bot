@@ -39,6 +39,7 @@ CRYMP_BOT_FORCEDCVARS = {
 }
 
 -----------
+BOT_SAFE_CALLS = true -- Ignored in developer mode (???)
 BOT_DEV_MODE = true -- Developer mode
 BOT_LUA_LOADED = false
 BOT_LAST_CONNECT = nil
@@ -52,6 +53,8 @@ BotDLL.RayTraceA = Game.Bot_RayTraceCheck
 BotDLL.RayRayWorldI = Game.Bot_RayWorldIntersection
 BotDLL.GetPID = Game.GetGameProcessId
 BotDLL.GetCDKey = Game.GetRandomCDKey
+BotDLL.CreateDir = Game.CreateFolder
+BotDLL.CreateDirA = Game.CreateNewDirectory
 
 -----------
 LAST_ERROR_NAME = "N/A"
@@ -153,37 +156,54 @@ end
 BotError = function(bQuit, bReloadFile)
 
 	---------
+	SCRIPT_USE_CRYERROR = true
 	SYSTEM_INTERRUPTED = true
 	SystemLog(">> SYSTEM_INTERRUPTED")
 
 	---------
 	local sStars = CRYMP_BOT_LOGSTARS
+	local sError_Name = tostring(LAST_ERROR_NAME)
+	local sError_Desc = tostring(LAST_ERROR)
 
 	SystemLog(sStars)
-	SystemLog("<ERROR>");
-	SystemLog(" -> " .. tostring(LAST_ERROR_NAME))
-	SystemLog(" -> " .. tostring(LAST_ERROR))
-	SystemLog(" ");
-	SystemLog("[DEBUG]");
+	SystemLog("$9<$4ERROR$9>");
+	SystemLog("$9 -> Name: $1" .. tostring(LAST_ERROR_NAME))
+	SystemLog("$9 -> Description: ")
+	if (string.match(sError_Desc, "\n*")) then
+
+		if (BOT_LUA_LOADED) then
+			for i, sLine in pairs(string.split(sError_Desc, "\n")) do
+				SystemLog("     $1" .. sLine);
+			end
+		else
+			for sLine in string.gmatch(sError_Desc, "[^\n]+") do
+				SystemLog("     $1" .. sLine);
+			end
+		end
+	else
+		SystemLog("     $1" .. sError_Desc);
+	end
+	SystemLog("$9 ");
+	SystemLog("$9[DEBUG]");
 
 	if (BOT_LUA_LOADED) then
 		SystemLog(table.tostring(Bot.aCfg, "  ", "Config = "))
 		SystemLog(" ");
 	else
-		SystemLog("BotLua not loaded")
+		SystemLog("$9BotLua not loaded")
 	end
 
-	SystemLog("%s", checkString(debug.traceback(), "<traceback failed>"))
-	SystemLog(" ");
-	SystemLog("Date: %s", os.date())
-	SystemLog("Version: %s", CRYMP_BOT_VERSION)
-	SystemLog("Developer: %s", string.bool(BOT_DEV_MODE))
-	SystemLog(" ");
-	SystemLog("(Send this Bot.log to shortcut0 on Discord for more info)")
+	SystemLog("$9%s", checkString(debug.traceback(), "<traceback failed>"))
+	SystemLog("$9 ");
+	SystemLog("$9Date: %s", os.date())
+	SystemLog("$9Version: %s", CRYMP_BOT_VERSION)
+	SystemLog("$9Developer: %s", string.bool(BOT_DEV_MODE)) -- DANGEROUS! string.bool CAN BE NULL!!
+	SystemLog("$9 ");
+	SystemLog("$9(Send this Bot.log to shortcut0 on Discord for more info)")
 	SystemLog(sStars)
 
 	if (Config and Config.UseErrorBox) then
-		BotDLL.MessageBox(string.format("Script Error (%s)\n\n%s\n\nCheck Console for more info or open Bot.log", LAST_ERROR_NAME, LAST_ERROR), "Error", 0+16)
+		BotDLL.MessageBox(string.format("Script Error (%s)\n*************************\n%s\n*************************\nCheck Console for more info or open Bot.log", sError_Name, sError_Desc), "Error", 0+16)
 	end
 
 	if (bQuit) then
@@ -845,7 +865,7 @@ BotMain.OnPreConnect = function(self)
 		return false end
 
 	g_localActor.ON_CONNECTED = true
-	BotMain:OnConnected(player)
+	BotMain:OnConnected(g_localActor)
 end
 
 ----------
@@ -864,12 +884,8 @@ end
 BotMain.OnConnected = function(self, player)
 
 	---------------------
-	BOT_CONNECTED = true
-
-	---------------------
-	INGAME = true
-	_Connected = false
-	LAST_ACTOR = player
+	BOT_CONNECTED = true -- dafuq?
+	_Connected = false   -- ^^^^^^
 
 	---------------------
 	BotLog(CRYMP_BOT_LOGSTARS)
@@ -889,27 +905,13 @@ BotMain.OnConnected = function(self, player)
 
 	---------------------
 	BotLog("Game Rules Patched")
-end;
+end
 
 ----------
 -- Init
-BotMain.ValidServer = function(self, IP)
-
-	-----------
-	if (self.IGNORE_IP_CHECK) then
-		return true end
-
-	-----------
-	local bValid, sStatus, iStatus = os.execute("ping -n 1 -w 8000 " .. IP);
-	BotLog("Server Ping Result: IP = " .. IP .. ", Status = " .. tostring(bValid));
-
-	-----------
-	if ((tostring(bValid) ~= "true" and tostring(bValid) ~= "0")) then
-		return false end
-
-	-----------
+BotMain.ValidServer = function(self, sAddress)
 	return true
-end;
+end
 
 ----------
 -- Init
@@ -932,18 +934,6 @@ BotMain.SelectServer = function(self, sIP, iPort, sKey)
 
 	-----------
 	return true
-end
-
-----------
--- Init
-BotMain.Assign = function(self, val1, val2, code)
-	pcall(loadstring(val1 .. ", " .. val2 .. " = " .. code));
-end
-
-----------
--- Init
-RunCommand = function(self, line)
-	return os.execute(line);
 end
 
 ----------

@@ -443,7 +443,7 @@ BotNavigation.Update = function(self)
 			self:SetEntityUnreachable(self.CURRENT_PATH_TARGET)
 		end
 	end
-		
+
 	----------------
 	self.CURRENT_PATH_POS = hCurrentNode
 		
@@ -585,6 +585,36 @@ BotNavigation.IsCurrentNodeIndoors = function(self, bIgnoreUnderground)
 end
 
 ---------------------------
+-- GetLastIndoorsNodeOnPath
+
+BotNavigation.GetLastIndoorsNodeOnPath = function(self)
+
+	local bIndoors = Bot:IsIndoors()
+	if (not bIndoors) then
+		return
+	end
+
+	local aPath = self.CURRENT_PATH_ARRAY
+	local iPath = table.count(aPath)
+	local iCurrentNode = self.CURRENT_PATH_NODE
+	if ((not aPath or not iCurrentNode) or iCurrentNode > iPath) then
+		return
+	end
+
+	local vLastNode
+	for iNode = iCurrentNode, iPath do
+		local vNode = aPath[iNode]
+		if (vNode and Bot:IsIndoors(vNode)) then
+			vLastNode = vNode
+		else
+			break
+		end
+	end
+
+	return vLastNode
+end
+
+---------------------------
 -- GetNodeCountToIndoors
 
 BotNavigation.GetNodeCountToIndoors = function(self, bIgnoreUnderground)
@@ -701,11 +731,18 @@ end
 -- GetTargetId
 
 BotNavigation.GetTargetId = function(self)
-	local hEntity = self.CURRENT_PATH_TARGET
+	local hEntity = self:GetTarget()
 	if (hEntity) then
 		return hEntity.id end
 		
 	return
+end
+
+---------------------------
+-- GetTargetId
+
+BotNavigation.GetTarget = function(self)
+	return self.CURRENT_PATH_TARGET
 end
 
 ---------------------------
@@ -813,6 +850,36 @@ BotNavigation.IsNodeVisible = function(self, vNode, bRayCheck)
 				-- return false end
 		-- end
 		
+		-----------
+		return bVisible
+	end
+
+---------------------------
+-- IsNodeVisible
+
+BotNavigation.IsNodeVisible_Actor = function(self, vNode, hEntity)
+
+		-----------
+		local vDir = hEntity.actor:GetHeadDir()
+		local vPos = hEntity.actor:GetHeadPos()
+		local iDistance = vector.distance(vNode, vPos)
+
+		-----------
+		local bVisible = Pathfinding.CanSeeNode(vector.sub(vPos, vector.new(vDir)), vNode, hEntity.id)
+		if (not bVisible) then
+			bVisible = Pathfinding.CanSeeNode(vector.sub(hEntity:GetBonePos("Bip01 Pelvis"), vector.new(vDir)), vNode, hEntity.id)
+		end
+
+		-- Pathfinding:Effect(vNode)
+		-----------
+		-- if (bRayCheck and bVisible) then
+			-- local vRayHit = Pathfinding.GetRayHitPosition(vPos, vDir, iDistance, ent_all, g_localActorId)
+			-- self:Log(0, "iDistance: %f, RayDist: %f", iDistance, vector.distance(vRayHit, vPos))
+			-- if (vRayHit and (vector.distance(vRayHit, vPos) * 1) < iDistance) then
+				-- self:Log(0, "Not visible!")
+				-- return false end
+		-- end
+
 		-----------
 		return bVisible
 	end
@@ -1282,6 +1349,7 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 		-----------
 		local hTarget
 		local bTarget = false
+		local bAITarget
 		
 		-----------
 		-- self:Log(0, "Update Env ??")
@@ -1306,21 +1374,30 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 				hTarget = self.SPAWNPOINT_ENVIRONMENT[3][iCurrentEnt]
 			until (iCurrentEnt >= self.SPAWNPOINT_ENVIRONMENT[2] or hTarget ~= self.CURRENT_PATH_LAST_TARGET)
 			hTarget = self.SPAWNPOINT_ENVIRONMENT[3][iCurrentEnt]
-			
+
 			-----------
+			NaviLog("Current target is %s, asking AI for new one..", hTarget:GetName())
 			local hNewTarget = BotAI.CallEvent("GetPathGoal", hTarget)
 			if (not isDead(hNewTarget)) then
 				hTarget = hNewTarget
+				bAITarget = true
 				if (hTarget and Bot:GetDistance(hTarget) < 2.5) then
-					self:ResetPath()
-					PathFindLog("Stopping path ??")
-					--BotAI.CallEvent("")
-					return -- ???
+					hNewTarget = BotAI.CallEvent("PathGoalReached")
+					if (hNewTarget and hNewTarget.id ~= hTarget.id) then
+						hTarget = hNewTarget
+						bAITarget = true
+					else
+						self:ResetPath()
+						PathFindLog("Stopping path ??")
+						--BotAI.CallEvent("")
+						return -- ???
+					end
 				end
 			end
 		else
 			hTarget = sTargetsClass
 			bTarget = true
+			NaviLog("target passed directly: $4%s", hTarget:GetName())
 			-- bIgnorePlayers = true
 		end
 		
@@ -1330,18 +1407,22 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 		-----------
 		local bPlayer = false
 		local aTarget = self:GetClosestAlivePlayer()
-		if (not bTarget and aTarget and not self:WasEntityUnreachable(aTarget) and aTarget.id ~= g_localActorId) then
-			hTarget = aTarget
-			bPlayer = true
+
+		if (not bAITarget) then
+			if (not bTarget and aTarget and not self:WasEntityUnreachable(aTarget) and aTarget.id ~= g_localActorId) then
+				hTarget = aTarget
+				bPlayer = true
+				NaviLog("$4target now selected by NAVVI !!")
+			end
 		end
 
 		--BotMainLog("target=%s",tostring(aTarget))
 		
 		-----------
 		if (hTarget and hTarget.actor and vector.distance(hTarget:GetPos(), Bot:GetPos()) < 3.5 and Bot:IsVisible(hTarget) and table.count(GetPlayers()) == 2) then
-			self:SetSleepTimer(0.5)
+			--self:SetSleepTimer(0.5)
 			NaviLog("SLeeping")
-			return -- ???
+			--return -- ??? WTF IS THIS ??
 		end
 
 		-----------
@@ -1360,7 +1441,7 @@ BotNavigation.GetNewPath = function(self, sTargetsClass, bIgnorePlayers, bRetry)
 			iDistance = vector.distance(vPos, vTarget)
 			
 			vGoal = vector.modify(vTarget, "z", 0.5, true)
-			
+
 			if (not vector.isvector(vGoal)) then
 			else
 				aPath = Pathfinding:GetPath(vector.modify(vPos, "z", 0.5, true), vGoal)
@@ -1570,7 +1651,7 @@ BotNavigation.CheckIfPlayerMoved = function(self, vGoalPos, idPlayer, iThreshold
 
 		-----------
 		--BotMainLog("i=%f",iDistance)
-		return (iDistance > checkVar(iThreshold, 5))
+		return (iDistance > checkVar(iThreshold, 15))
 	end
 
 ---------------------------

@@ -19,7 +19,10 @@ BotAI:CreateServerModule(SERVER_ADDR_ALIEN, SERVER_PORT_ANY, {
 
         ----------
         IsTargetOk = function(self)
+        end,
 
+        ----------
+        OkInVehicle = function(self)
         end,
 
         ----------
@@ -34,9 +37,16 @@ BotAI:CreateServerModule(SERVER_ADDR_ALIEN, SERVER_PORT_ANY, {
                 if (table.count(aHunters) > 0) then
                     if (Bot:IsIndoors()) then
 
+                        -- Maybe bad idea, last node means exit of tunnel/building/whatever. means more visible
+                        local vLastIndoors = BotNavigation:GetLastIndoorsNodeOnPath()
+                        if (not Bot:IsUnderground()) then
+                            -- ?? only tunnels
+                            vLastIndoors = nil
+                        end
+
                         for i, hHunter in pairs(aHunters) do
                             local iHP = checkNumber(hHunter.actor:GetHealth(), 0)
-                            if (iHP > 0 and vector.distance(vPos, hHunter:GetPos()) < 125) then
+                            if (iHP > 0 and vector.distance(checkVar(vLastIndoors, vPos), hHunter:GetPos()) < 125) then
                                 bPause = true
                             end
                         end

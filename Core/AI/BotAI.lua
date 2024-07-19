@@ -63,7 +63,10 @@ eAI_gInCaptureZone = "inCaptureZone"
 
 AISetGlobal = GetDummyFunc()
 AIGetGlobal = GetDummyFunc()
+
 AIEvent = GetDummyFunc()
+AIEVENT_ABORT = 0
+AIEVENT_OK = 1
 
 -------------------
 -- Init
@@ -305,8 +308,19 @@ BotAI.LoadAIModules = function()
 	end
 
 	---------------------
+	BOT_ENTITY_DATA_PROCESSED = checkGlobal(BOT_ENTITY_DATA_PROCESSED, {})
 	BOT_ENTITY_DATA = nil
 	BotAI:LoadEntityData()
+
+	---------------------
+	if (isArray(BOT_ENTITY_DATA_PROCESSED)) then
+		for idEntity, hEntity in pairs(BOT_ENTITY_DATA_PROCESSED) do
+			if (hEntity.OLD_POSITION) then
+				hEntity.GetPos = hEntity.OLD_POSITION
+				AILog("Reset entity")
+			end
+		end
+	end
 
 	---------------------
 	if (isArray(BOT_ENTITY_DATA)) then
@@ -322,7 +336,7 @@ BotAI.LoadAIModules = function()
 
 					local sType = aLocations.Type
 					local aEntities = GetEntities(GET_ALL, nil, function(a)
-						AILog("1")
+						--AILog("1")
 						local iDist = vector.distance(a:GetPos(), aLocations.Location)
 						if (iDist > 5) then
 							return false
@@ -336,11 +350,22 @@ BotAI.LoadAIModules = function()
 
 					local vMoves = aLocations.Move
 					for i, hEntity in pairs(aEntities) do
+
+						BOT_ENTITY_DATA_PROCESSED[hEntity.id] = hEntity
+						hEntity.OLD_POSITION = checkVar(hEntity.OLD_POSITION, hEntity.GetPos)
+
 						hEntity.GetPos = function()
 							if (vector.isvector(vMoves)) then
 								return vMoves
 							end
-							return getrandom(vMoves)
+
+							if (timerexpired(hEntity.DYNAMIC_POS_UPDATE, 120)) then
+								hEntity.DYNAMIC_POS = getrandom(vMoves)
+								hEntity.DYNAMIC_POS_UPDATE = timerinit()
+							end
+
+							--AILog("Dynamic position: %s", g_TS(hEntity.DYNAMIC_POS))
+							return hEntity.DYNAMIC_POS
 						end
 						AILog("Updated position for entitiy %s", hEntity:GetName())
 					end
