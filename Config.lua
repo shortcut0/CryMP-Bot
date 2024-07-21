@@ -24,13 +24,15 @@ Config = {
 	CurrentServer = "178.190.213.69:64087"; -- sox elite
 	CurrentServer = "185.22.237.253:11512"; -- tox ia
 
-	CurrentServer = "185.22.237.253:11502"; -- something_pro
-	CurrentServer = "185.22.237.253:11501"; -- something
-
 	CurrentServer = "116.203.92.129:55001:1"; -- atoms
 	CurrentServer = "127.0.0.1:66666:2020"; -- local
 
 	CurrentServer = "94.16.110.182:64005"; -- alien
+
+	CurrentServer = "185.22.237.253:11501"; -- something
+	CurrentServer = "185.22.237.253:11502"; -- something_pro
+
+	CurrentServer = "94.16.110.182:64089"; -- Mistersd Ia
 
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers

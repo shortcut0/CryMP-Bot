@@ -52,6 +52,25 @@ BotAI:CreateAIModule("PowerStruggle", {
 		end,
 
 		------------------------------
+		-- CanGoIdle
+
+		CanGoIdle = function(self, ...)
+			self:AILog(0, "%s.Events.CanGoIdle()", self.ModuleFullName)
+
+			-- never in PS?
+			return AIEVENT_ABORT
+		end,
+
+		------------------------------
+		-- IsCapturing
+
+		IsCapturing = function(self, ...)
+			self:AILog(0, "%s.Events.IsCapturing()", self.ModuleFullName)
+
+			return self:IsCapturing(...)
+		end,
+
+		------------------------------
 		-- GetPathGoal
 
 		GetPathGoal = function(self, hRandomEntity)
@@ -85,6 +104,14 @@ BotAI:CreateAIModule("PowerStruggle", {
 			if (bExiting and hOurVehicle and hOurVehicle.id == hVehicle.id) then
 				hUser.VAN_ABANDON_TIMER = timerinit()
 			end
+		end,
+
+		------------------------------
+		-- ValidateVehicle
+		ValidateVehicle = function(self, hVehicle)
+
+			-- no checks yet
+			return AIEVENT_OK
 		end,
 
 		------------------------------
@@ -794,7 +821,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			end
 
 			hEntity.IsType = function(self, ...)
-				return (string.matchany(self.BUILDING_TYPE, ...))
+				return (string.matchex(self.BUILDING_TYPE, ...))
 			end
 		end
 		
@@ -920,6 +947,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 			BotNavigation:ResetPath()
 		end
 		if (iNaviSleep) then
+			AILog("Setting Sleep Timer")
 			BotNavigation:SetSleepTimer(0.5)
 		end
 
@@ -1009,7 +1037,7 @@ BotAI:CreateAIModule("PowerStruggle", {
 		local vPos = g_localActor:GetPos()
 		
 		---------
-		if (BotNavigation.LAST_PATHGEN_FAILED) then
+		if ((BotNavigation.AI_TARGET_ISSAME or BotNavigation.LAST_PATHGEN_FAILED or checkNumber(BotNavigation.CURRENT_PATH_GOALDIST, 999) < 2)) then
 			BotNavigation:SetSleepTimer(1) end
 
 		---------
@@ -1074,10 +1102,12 @@ BotAI:CreateAIModule("PowerStruggle", {
 		----
 		local iDistanceClosestAny
 		local bClosestAnyInProtoArea
+		local bClosestAnyIsProto
 		if (hClosestAny) then
 			AILog("Closest of any type: %s", hClosestAny:GetName())
 			iDistanceClosestAny = vector.distance(hClosestAny:GetPos(), vPos)
 			bClosestAnyInProtoArea = (vector.distance(hClosestAny:GetPos(), vProto) < (iProtoRange * 1.25))
+			bClosestAnyIsProto = (hClosestAny.BUILDING_TYPE == BUILDING_PROTO)
 		end
 
 		----
@@ -1192,6 +1222,9 @@ BotAI:CreateAIModule("PowerStruggle", {
 					return hClosestAny
 				elseif (bInProtoArea and bClosestAnyInProtoArea and not bCurrentInProtoArea and iDistanceClosestAny < 100) then
 					AILog("better building found")
+					return hClosestAny
+				elseif (bClosestAnyIsProto and iDistanceClosestAny < iCurrentDistance) then
+					AILog("Closest is PROTO!!")
 					return hClosestAny
 				end
 			end

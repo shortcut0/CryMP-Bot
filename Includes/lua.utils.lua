@@ -268,7 +268,7 @@ end
 -- checkGlobal("MY_GLOBAL", x)		-> gMY_GLOBAL (if null, returns x)
 -- checkGlobal(MY_GLOBAL, x)		-> gMY_GLOBAL (if null, returns x)
 
-luautils.checkGlobal = function(hGlobal, hDefault)
+luautils.checkGlobal = function(hGlobal, hDefault, fCheck, pCheck)
 
 	-------------
 	if (isNull(hGlobal)) then
@@ -280,16 +280,29 @@ luautils.checkGlobal = function(hGlobal, hDefault)
 	if (isString(hGlobal)) then
 
 		local fLoad = (loadstring or load)
-		bOk, fFunc = pcall(fLoad, string.format("return %s", checkString(hGlobal)))
+		local sFunc = string.format("return %s", checkString(hGlobal))
+
+		-- load string
+		bOk, fFunc = pcall(fLoad, sFunc)
 		if (not bOk) then
 			return hDefault
 		end
 
+		-- execute string
 		bOk, sErr = pcall(fFunc)
 		if (not bOk and string.findex(checkString(sErr), "attempt to index global", "attempt to index a nil value")) then
 			return hDefault
 		end
-		
+
+		-- it's undefined
+		if (sErr == nil) then
+			return hDefault
+		end
+
+		-- global value
+		if (isFunc(fCheck)) then
+			return fCheck(sErr, checkVar(pCheck, hDefault))
+		end
 		return sErr
 	end
 

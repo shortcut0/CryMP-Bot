@@ -231,7 +231,7 @@ vector.add = function(v1, v2)
 	------------------
 	if (not vector.isvector(v2)) then
 		return end
-	
+
 	------------------
 	v1.x = v1.x + v2.x
 	v1.y = v1.y + v2.y
@@ -417,6 +417,29 @@ vector.scale = function(v, iMul, sKey)
 	
 	------------------
 	return v
+end
+
+---------------------------
+-- vector.scaleInPlace
+
+vector.scaleInPlace = function(v, iMul, sKey)
+
+	------------------
+	if (not vector.isvector(v)) then
+		return v end
+
+	------------------
+	local n = vector.copy(v)
+	if (sKey and vector.iskey(sKey)) then
+		n[sKey] = n[sKey] * iMul
+	else
+		n.x = n.x * iMul
+		n.y = n.y * iMul
+		n.z = n.z * iMul
+	end
+
+	------------------
+	return n
 end
 
 ---------------------------
@@ -666,7 +689,92 @@ vector.distance2d = function(v1, v2)
 end
 
 ---------------------------
--- vector.rotate_90z 
+-- vector.left
+
+vector.left = function(v)
+	local iX = v.x
+	local iY = v.y
+	local iZ = v.z
+
+	-----
+	iX = -iY
+	iY = iX
+
+	-----
+	return { x = iX, y = iY, z = iZ }
+end
+
+---------------------------
+-- vector.right
+
+vector.right = function(v)
+	local iX = v.x
+	local iY = v.y
+	local iZ = v.z
+
+	-----
+	iX = iY
+	iY = -iX
+
+	-----
+	return { x = iX, y = iY, z = iZ }
+end
+
+---------------------------
+-- vector.reverse
+
+vector.reverse = function(v)
+	local iX = v.x
+	local iY = v.y
+	local iZ = v.z
+
+	-----
+	iX = -iX
+	iY = -iY
+
+	-----
+	return { x = iX, y = iY, z = iZ }
+end
+
+---------------------------
+-- vector.reverse
+
+vector.mid = function(v1, v2)
+	local iX = ((v1.x + v2.x) / 2)
+	local iY = ((v1.y + v2.y) / 2)
+	local iZ = ((v1.z + v2.z) / 2)
+
+	-----
+	return { x = iX, y = iY, z = iZ }
+end
+
+---------------------------
+-- vector.reverse
+
+vector.interpolate = function(v1, v2, i)
+	local iX = (v1.x + i * (v2.x - v1.x))
+	local iY = (v1.y + i * (v2.y - v1.y))
+	local iZ = (v1.z + i * (v2.z - v1.z))
+
+	-----
+	return { x = iX, y = iY, z = iZ }
+end
+
+---------------------------
+-- vector.reverse
+
+vector.between = function(v1, v2, distance)
+
+	-----
+	local vDir = vector.getdir(v1, v2, 1, -1)
+	local vDirScaled = vector.scaleInPlace(vDir, distance)
+
+	-----
+	return vector.addInPlace(v1, vDirScaled)
+end
+
+---------------------------
+-- vector.rotate_90z
 
 vector.rotaten = function(v, i)
 

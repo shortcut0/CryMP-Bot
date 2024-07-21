@@ -55,6 +55,14 @@ Pathfinding.RECORD_SKIP_FLYING = true
 Pathfinding.USE_BAKED_PATHNODES = false
 
 -------------------
+-- Draw Tools
+Pathfinding.DRAW_NAVMESH = false
+Pathfinding.DRAW_DISPLAYTIME = 20
+Pathfinding.DRAW_TIMER = nil
+Pathfinding.DRAW_USE_LINES = true
+Pathfinding.DRAW_LABELS = {}
+
+-------------------
 
 NAVMESH_DEFAULT = 0
 
@@ -136,6 +144,7 @@ Pathfinding.InitCVars = function()
 		{ "test_live",  		"Pathfinding:LivePathfindingTest(%1)", 	"Tests the Pathfinding System with real time tests" },
 
 		---------------
+		{ "drawnavmesh",		"Pathfinding:SetPaintLinks()",			"Paints all Links of all Nodes of the current Navmesh" },
 		{ "paintlinks",			"Pathfinding:PaintLinks(nil,nil,30)",	"Paints all Links of all Nodes of the current Navmesh" },
 		{ "paintunlinked",		"Pathfinding:PaintUnlinkedNodes()",		"Shows all nodes that do not have any links" },
 
@@ -285,16 +294,17 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 
 	------------
 	self.VALIDATION_FUNC_DEBUG = false
-	self.VALIDATION_FUNC = function(vSrc, vTgt, iP2, iP3)
+	self.VALIDATION_FUNC = function(vSrc, vTgt, iP2, iP3, iMaxDistance)
 
+		local iMaxDist = checkNumber(iMaxDistance, 20)
 		local iDist = vector.distance(vSrc, vTgt)
 		local aDir = vector.getdir(vSrc, vTgt, true)
 
 		local vSrc_Back = vector.sub(vector.new(vSrc), aDir)
 		local vTgt_Back = vector.add(vector.new(vTgt), aDir)
 
-		local vSrc_BackE = vector.modify(vSrc_Back, "z", 0.5, true)
-		local vTgt_BackE = vector.modify(vTgt_Back, "z", 0.5, true)
+		local vSrc_BackE = vector.modifyz(vSrc_Back, 0.5)
+		local vTgt_BackE = vector.modifyz(vTgt_Back, 0.5)
 
 		local bRHOk = true
 		local bHitEntity = false
@@ -306,7 +316,7 @@ Pathfinding.InitNavmesh = function(self, bReload, aNavmesh, aWJNavmesh)
 			bRHOk = ((iHits == 0) and not aHit.entity)
 		end
 		--]]
-		if (iDist > 25) then
+		if (iDist > iMaxDist and iMaxDist ~= -1) then
 			--PathFindLog("FATAL distance check FAILED")
 			return false
 		elseif (iDist > 1.25) then
@@ -679,25 +689,31 @@ end
 
 Pathfinding.FinalCheckLinks = function(self, aNavmesh)
 
+	local iDebugDistance = 3
+	local bDebugOk = true
+
 	----------------
 	local iFixed = 0
 	local bFixed = false
+	local bForced
 	local iNodes = 0
 
 	----------------
 	for iNode, aNode in pairs(aNavmesh) do
 
 		----------------
-		local vNode = aNode.pos
+		local vNode = vector.copy(aNode.pos)
 		FORCED_LINKS[iNode] = (FORCED_LINKS[iNode] or {})
 
 		if (table.count(aNode.links) > 0) then
 			bFixed = false
 
 			for iLink in pairs(aNode.links) do
+
+
 				local aLink = aNavmesh[iLink]
 				if (aLink) then
-					local vLink = aLink.pos
+					local vLink = vector.copy(aLink.pos)
 					if (vLink) then
 						local iDist = vector.distance(vNode, vLink)
 						local iZDiff = (vNode.z - vLink.z)
@@ -705,11 +721,99 @@ Pathfinding.FinalCheckLinks = function(self, aNavmesh)
 							iZDiff = iZDiff * -1
 						end
 
+						bForced = (FORCED_LINKS[iNode][iLink])
 						local bValidate = self.VALIDATION_FUNC(vNode, vLink, NULL_ENTITY, NULL_ENTITY)
+						local bIllegalElevation = false
+						local bIllegalBridge = false
+						local iZDiff = math.positive(vNode.z - vLink.z)
+						local bNodeTerrain = self:IsPointOnTerrain(vNode)
+						local bLinkTerrain = self:IsPointOnTerrain(vLink)
+						local bUnderwater = Bot:IsUnderwater(vNode)
+
+						bDebugOk = true
+						--if (bDebugOk == true) then
+						--	bDebugOk = vector.distance(Bot:GetPos(), vNode) < iDebugDistance
+						--end
+
+						if (not bUnderwater and iZDiff > 0.3 and bNodeTerrain and not bLinkTerrain) then
+							if (not bForced or (iZDiff > 1 and iDist > 1)) then
+								bIllegalElevation = true
+							--	BotMainLog("Illegal connection")
+							--	self:Effect(vLink)
+							--	self:Effect(vNode)
+							else
+								--self:Effect(vLink)
+								--self:Effect(vNode)
+							--	BotMainLog("BAD forced node?")
+							end
+						end
+
+						-- safe cpu
+						if (bDebugOk and not bUnderwater and not bForced and not bIllegalElevation and not bNodeTerrain and not bLinkTerrain and iDist > 1) then
+
+							local iStep = 0
+							local iHits = 0
+							for _, vFloating in pairs({
+								vector.mid(vNode, vLink),
+								vector.interpolate(vNode, vLink, 0.1),
+								vector.interpolate(vLink, vNode, 0.1),
+								vector.interpolate(vNode, vLink, 0.2),
+								vector.interpolate(vLink, vNode, 0.2),
+							}) do
+								iHits = Physics.RayWorldIntersection(vFloating, { x = 0, y = 0, z = -2 }, 1, (ent_all - ent_living), g_localActorId, nil, g_HitTable)
+								if (iHits == 0) then
+									bIllegalBridge = true
+									CryAction.PersistantSphere(vFloating, 0.1, { 1, 0, 0 }, "debug", 10)
+									PathFindLog("Illegal Bridge detected!")
+									break
+								end
+							end
+
+							--[[
+							local vNode_25 = vector.interpolate(vNode, vLink, 0.25)
+							local vNode_05 = vector.between(vNode, vLink, 0.5)
+							local vLink_25 = vector.interpolate(vLink, vNode, 0.25)
+							local vLink_05 = vector.interpolate(vLink, vNode, 0.5)
+							local vMiddle = vector.mid(vNode, vLink)
+
+							--CryAction.PersistantSphere(vNode_25, 0.1, { 1, 0, 0 }, "toLINK", 10)
+							--CryAction.PersistantSphere(vLink_25, 0.1, {0, 1, 0 }, "toNODE", 10)
+							--CryAction.PersistantSphere(vMiddle, 0.1, {0, 0, 1 }, "MIDDLE", 10)
+
+							local vLoc
+							local iHits = Physics.RayWorldIntersection(vNode_25, { x = 0, y = 0, z = -5 }, 1, ent_all - ent_living, g_localActorId, nil, g_HitTable)
+							if (iHits > 0) then
+								--PathFindLog("FIRST OK!")
+								iHits = Physics.RayWorldIntersection(vLink_25, { x = 0, y = 0, z = -5 }, 1, ent_all - ent_living, g_localActorId, nil, g_HitTable)
+								if (iHits == 0) then
+									vLoc = vLink_25
+								end
+							else
+								vLoc = vNode_25
+							end
+
+							if (iHits > 0) then
+								--PathFindLog("SECOND OK!")
+								iHits = Physics.RayWorldIntersection(vMiddle, { x = 0, y = 0, z = -5 }, 1, ent_all - ent_living, g_localActorId, nil, g_HitTable)
+								if (iHits == 0) then
+									vLoc = vMiddle
+								end
+							end
+
+							if (iHits == 0) then
+								bIllegalBridge = true
+								CryAction.PersistantSphere(vLoc, 0.1, { 1, 0, 0 }, "toLINK", 10)
+								self:Effect(vLoc, 0.1)
+								PathFindLog("Illegal BRIDGE!")
+							end
+							]]
+							--bDebugOk = false
+						end
+
 						--if (bValidate and iDist < self.NODE_MAX_DIST_PANIC) then
 						--	PathFindLog("ok !")
 						--else
-							if ((iDist > 14 and iZDiff > 3) or (Bot:IsUnderwater(vNode) and iDist > 15 and not bValidate) or (iDist > 25)) then
+							if (bIllegalBridge or bIllegalElevation or (iDist > 14 and iZDiff > 3) or (Bot:IsUnderwater(vNode) and iDist > 15 and not bValidate) or (iDist > 25)) then
 
 
 								aNavmesh[iNode].links[iLink] = nil
@@ -974,14 +1078,23 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance, fPanicDistance
 
 				if (bOk or bPanic) then
 
-					local bElevation = self:CheckNodesElevation(vSource, vTarget)
+					-- THIS OR
+					local bElevationOk = self:CheckNodesElevation(vSource, vTarget)
+
+					-- ELSE
+					local bElevationEx = self:CheckNodesElevation(vSource, vTarget, 1.5)
+					local bDistanceOk = (iDistance > 1 and iDistance < fPanicDistance) --- never skip panic ?
+					local bCollisionOk = (self:CheckNodeCollisions(vSource, vTarget) == 0)
+					local bSourceOnTerrain = self:IsPointOnTerrain(vSource)
+					local bTargetOnTerrain = self:IsPointOnTerrain(vTarget)
+
 					local bIgnoreElevation = ( true
-						and (iDistance > 1) -- !!FIXME: experimental: so we dont try to climb objects??
+						and (bDistanceOk) -- !!FIXME: experimental: so we dont try to climb objects??
 						and (not bInDoors)
-						and (self:CheckNodeCollisions(vSource, vTarget) == 0)
+						and (bCollisionOk)
 						and (not bPanic)
-						and (self:CheckNodesElevation(vSource, vTarget, 1.5)) -- !!FIXME: global for 1.5 (PATH_MAX_Z_DIFF ??)
-						and (self:IsPointOnTerrain(vSource))
+						and (bElevationEx) -- !!FIXME: global for 1.5 (PATH_MAX_Z_DIFF ??)
+						and (bSourceOnTerrain and bTargetOnTerrain) -- !!FIXME: EXPERIMENTAL: only if BOTH are on terrain?? so we dont try to skip parts of eg. a stair
 					)
 
 					--if (not bElevation) then
@@ -991,7 +1104,7 @@ Pathfinding.GenerateLinks = function(self, iSource, fMaxDistance, fPanicDistance
 					--	end
 					--end
 
-					if ((bElevation or bIgnoreElevation)) then
+					if ((bElevationOk or bIgnoreElevation)) then
 						local bUnderwater = Bot:IsUnderwater(vTarget)
 						local bCanSee = false
 						if (not bCanSee) then
@@ -1896,23 +2009,51 @@ Pathfinding.CanSeeNode = function(vSource, vTarget, idSource, idTarget)
 end
 
 ---------------------------------------------
+-- Pathfinding.CanSeeNode_Simple
+
+Pathfinding.CanSeeNode_Simple = function(vTarget, hSource)
+
+	------
+	local vSource = checkVar(hSource, Bot:GetViewCameraPos())
+	return Pathfinding.VALIDATION_FUNC(vSource, vTarget, NULL_ENTITY, NULL_ENTITY, -1)
+
+end
+
+---------------------------------------------
 -- Pathfinding.GetClosestVisiblePoint
 
 Pathfinding.GetClosestVisiblePoint = function(self, vSource, pred, iMaxDist)
 
 	local aClosest = { nil, nil, checkNumber(iMaxDist, -1) }
+	local aClosest_LowElevation = { nil, nil, checkNumber(iMaxDist, 10) }
+	local aClosest_NoElevation = { nil, nil, checkNumber(iMaxDist, 5) }
 
 	-----------------
 	for i, v in pairs(self.VALIDATED_NAVMESH) do
 		if (pred == nil or pred(vSource, v.pos) == true) then
 			local iDistance = vector.distance(v.pos, vSource)
-			if ((iDistance < aClosest[3] or aClosest[3] == -1) and (BotNavigation:IsNodeVisible(vSource, true))) then --or self.CanSeeNode(vSource, v.pos))) then
+			local bVisible = BotNavigation:IsNodeVisible(vSource, true)
+
+			if (self:CheckNodesElevation(v.pos, vSource, 0.05) and (iDistance < aClosest_NoElevation[3] or aClosest_NoElevation[3] == -1) and (bVisible)) then --or self.CanSeeNode(vSource, v.pos))) then
+				aClosest_NoElevation = { v.pos, i, iDistance }
+			end
+			if (self:CheckNodesElevation(v.pos, vSource, 0.15) and (iDistance < aClosest_LowElevation[3] or aClosest_LowElevation[3] == -1) and (bVisible)) then --or self.CanSeeNode(vSource, v.pos))) then
+				aClosest_LowElevation = { v.pos, i, iDistance }
+			end
+
+			if ((iDistance < aClosest[3] or aClosest[3] == -1) and (bVisible)) then --or self.CanSeeNode(vSource, v.pos))) then
 				aClosest = { v.pos, i, iDistance }
 			end
 		end
 	end
 
 	----------------
+	if (aClosest_NoElevation[1]) then
+		return aClosest_NoElevation[1], aClosest_NoElevation[2]
+	end
+	if (aClosest_LowElevation[1]) then
+		return aClosest_LowElevation[1], aClosest_LowElevation[2]
+	end
 	return aClosest[1], aClosest[2]
 end
 
@@ -2021,6 +2162,119 @@ Pathfinding.GetMapName = function()
 	local sRules, sMap = string.match(string.lower(Bot.GetLevelName()), "multiplayer/(.*)/(.*)")
 	return sMap, sRules
 end
+
+---------------------------
+-- SetPaintLinks
+
+Pathfinding.SetPaintLinks = function(self)
+	if (self.DRAW_NAVMESH) then
+		self.DRAW_NAVMESH = false
+	else
+		self.DRAW_NAVMESH = true
+	end
+
+	PathFindLog("Navmesh Drawing: %s", string.bool(self.DRAW_NAVMESH, BTOSTRING_ACTIVATED))
+end
+
+---------------------------
+-- UpdatePaintNavmesh
+
+Pathfinding.UpdatePaintNavmesh = function(self)
+	if (self.DRAW_NAVMESH) then
+
+		for _, aLabel in pairs(self.DRAW_LABELS) do
+			--System.DrawLabel(add2Vec(GetCamPos(), vecScale(GetCamDir(), 3)), 1.3, self.MOREHUD_MSG, 1, 1, 1, 1)
+			--System.DrawLabel(aLabel.Position, 1, aLabel.Text, unpack(aLabel.Color), 1)
+			System.DrawLabel(aLabel.Position, 1, aLabel.Text, aLabel.Color[1], aLabel.Color[2], aLabel.Color[3], 1)
+		end
+
+		if (timerexpired(self.DRAW_TIMER, (self.DRAW_DISPLAYTIME / 2))) then
+			self:PaintNavmeshEx()
+		end
+	end
+end
+
+---------------------------
+-- PaintNavmeshEx
+
+Pathfinding.PaintNavmeshEx = function(self)
+
+	-----------
+	self.DRAW_TIMER = timerinit()
+
+	-----------
+	local aData = self:GetNavmesh()
+	local iPath = table.count(aData)
+	if (iPath == 0) then
+		return end
+
+	-----------
+	self.DRAW_LABELS = {}
+
+	-----------
+	local iDisplayTime = self.DRAW_DISPLAYTIME
+	local aLinkColor = { 0, 0, 1 } -- Blue
+	local aNodeColorOk = { 0, 0, 1 } -- Blue
+	local aNodeColorBad = { 1, 0, 0 } -- Red
+	local aLabelColorOk = { 0, 1, 0 } -- Green
+	local aLabelColorBad = { 1, 0, 0 } -- Red
+
+	-----------
+	local aCurr, vCurr, vDir
+	local aLinks, iLinks, aLink, vLink
+	for i = 1, iPath do
+
+		aCurr = aData[i]
+
+		if (not aCurr) then
+			return PathFindLog("Path corrupted! Node %d does not exist", checkNumber(i, -1))
+		end
+
+		vCurr = aData[i].pos
+		aLinks = checkArray(aCurr.links)
+		iLinks = table.count(aLinks)
+
+		-- Draw Label
+		--if (System.IsPointVisible(vCurr) and self.CanSeeNode_Simple(vCurr)) then
+		if (iLinks <= 1) then
+			self.DRAW_LABELS[i] = {
+				Position = vCurr,
+				Text = string.format("[%04d] Links: %d", i, iLinks),
+				Color = aLabelColorOk
+			}
+		end
+
+		-- Draw Ok Node
+		if (iLinks > 0) then
+			CryAction.PersistantSphere(vCurr, 0.5, aNodeColorOk, ("NavPaintedSphere_" .. i), iDisplayTime)
+
+			-- Draw Links
+			for iLink in pairs(aLinks) do
+
+				aLink = aData[iLink]
+				vLink = aLink.pos
+				vDir = vector.getdir(vCurr, vLink, 1)
+
+				-- Select Draw Method
+				if (self.DRAW_USE_LINES) then
+					CryAction.PersistantLine(vCurr, vLink, aLinkColor, ("NavPaintedLine_" .. i), iDisplayTime)
+				else
+					CryAction.PersistantArrow(vCurr, 1, vDir, aLinkColor, ("NavPaintedLink_" .. i), iDisplayTime)
+				end
+			end
+		else
+
+			-- Update Bad Color
+			if (self.DRAW_LABELS[i]) then
+				self.DRAW_LABELS[i].Color = aLabelColorBad
+			end
+
+			-- Draw Bad Node
+			CryAction.PersistantSphere(vCurr, 0.5, aNodeColorBad, ("NavPaintedSphere_" .. i), iDisplayTime)
+		end
+	end
+end
+
 
 -------------------
 -- Pathfinding.PaintLinks
@@ -2479,6 +2733,9 @@ end
 Pathfinding.Update = function(self)
 
 	----------------
+	self:UpdatePaintNavmesh()
+
+	----------------
 	if (self.RECORD_NAVMESH) then
 		self:RecordNavmesh()
 	end
@@ -2756,7 +3013,7 @@ Pathfinding.CompareNodeElevation = function(self, vNode, iThreshold, vOldNode)
 	local iElevationDiff = (vOldNode.z - vNode.z)
 
 	----------------
-	 PathFindLog(iElevationDiff)
+	--PathFindLog(iElevationDiff)
 	if (iElevationDiff > iThreshold) then
 		return false elseif (iElevationDiff < -iThreshold) then
 			return false end
@@ -2772,7 +3029,8 @@ Pathfinding.IsNodesInRadius = function(vSource, iDistance, aNodes, iZ)
 
 	----------------
 	for i, node in pairs(aNodes) do
-		if (vector.distance(node, vSource) < iDistance and (not iZ or vSource.z - node.z < iZ)) then
+		-- PathFindLog(math.positive(vSource.z - node.z))
+		if (vector.distance(node, vSource) < iDistance and (not iZ or math.positive(vSource.z - node.z) < iZ)) then
 			return true end end
 
 	----------------

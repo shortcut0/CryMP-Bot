@@ -112,7 +112,24 @@ BotAPI.LogSystemInterrupt = function(self)
 end
 
 -------------------
-BotAPI.Events = {}
+-- APIReady
+
+BotAPI.APIReady = function(self)
+
+	--------
+	if (not g_localActor) then
+		return false
+	end
+
+	--------
+	return true
+end
+
+-------------------
+BotAPI.Events = {
+
+	APIReady = BotAPI.APIReady
+}
 
 -------------------
 -- OnTimer
@@ -241,6 +258,14 @@ end
 -- DoUpdate
 
 BotAPI.Events.OnWallJump = function(self, hPlayer)
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
+
+	--------
 	if (Bot) then
 		Bot:OnWallJump(hPlayer)
 	end
@@ -250,24 +275,48 @@ end
 -- DoUpdate
 
 BotAPI.Events.OnNetworkLag = function(self, bLag)
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
 end
 
 -------------------
 -- DoUpdate
 
 BotAPI.Events.OnChatMessage = function(self, hSender, hReceiver, sMessage, iType)
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
 end
 
 -------------------
 -- DoUpdate
 
 BotAPI.Events.OnFlashbangBlind = function(self, hPlayer, iPower)
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
 end
 
 -------------------
 -- DoUpdate
 
 BotAPI.Events.DoUpdate = function(self, frameTime)
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
 
 	-----------
 	if (Bot and Bot.PreUpdate) then
@@ -299,6 +348,12 @@ end
 
 BotAPI.Events.OnRevive = function(self, channelId, player, isBot) -- when received phys profile "alive" from server
 
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
+
 	-----------
 	if (Bot and Bot.OnRevive) then
 		self:SafeCall(Bot.OnRevive, Bot, player, isBot, channelId)
@@ -310,6 +365,12 @@ end
 
 BotAPI.Events.OnJump = function(self, channelId, player, isBot)
 
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
+
 	-----------
 	if (Bot and Bot.OnPlayerJump) then
 		self:SafeCall(Bot.OnPlayerJump, Bot, player, isBot, channelId)
@@ -320,7 +381,13 @@ end
 -- OnShoot
 
 BotAPI.Events.OnShoot = function(self, weapon, player, pos, dir)
-	
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
+
 	-----------
 	if (Bot and Bot.OnShoot) then
 		self:SafeCall(Bot.OnShoot, Bot, player, weapon, pos, dir, (player.id == g_localActorId))
@@ -350,6 +417,12 @@ end
 
 BotAPI.Events.OnHit = function(self, hit)
 
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
+
 	-----------
 	if (Bot and Bot.PreOnHit) then
 		Bot:PreOnHit(hit) end
@@ -360,6 +433,12 @@ end
 
 BotAPI.Events.OnHit = function(self)
 
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
+
 	-----------
 	if (Bot and Bot.OnNetworkLag) then
 		Bot:OnNetworkLag() end
@@ -369,6 +448,12 @@ end
 -- OnExplosion
 
 BotAPI.Events.OnExplosion = function(self, explosion) -- Explosions near the bot
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
 
 	-----------
 	if (Bot and Bot.PreOnExplosion) then
@@ -430,7 +515,13 @@ end
 -- OnTaggedEntity
 
 BotAPI.Events.OnTaggedEntity = function(self, entityId)
-	
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
+
 	-----------
 	if (Bot and Bot.OnTaggedEntity) then
 		self:SafeCall(Bot.OnTaggedEntity, Bot, entityId, GetEntity(entityId)) end
@@ -440,28 +531,16 @@ end
 -- OnRadioMessage
 
 BotAPI.Events.OnRadioMessage = function(self, hSender, iMessage)
-	
+
+	--------
+	-- Check
+	if (not self:APIReady()) then
+		return
+	end
+
 	-----------
 	if (Bot and Bot.OnRadioMessage) then
 		self:SafeCall(Bot.OnRadioMessage, Bot, hSender, iMessage) end
-end
-
--------------------
--- GetFunctionName
-
-BotAPI.Events.GetFunctionName = function(self, f)
-
-	-----------
-	if (f:find("%.") or f:find(":")) then
-		return end
-		
-	-----------
-	for i, v in pairs(_G or{}) do
-		if (v == f) then
-			return i end end
-
-	-----------
-	return
 end
 
 -------------------

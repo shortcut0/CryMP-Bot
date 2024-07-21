@@ -6,8 +6,11 @@
 --=====================================================
 
 ---------------
+
 GET_ALL = 1
 ENTITY_ALL = 1
+
+-------------------
 
 ENTITY_PLAYER = "Player"
 ENTITY_ALIEN = "Alien"
@@ -15,7 +18,21 @@ ENTITY_HUNTER = "Hunter"
 ENTITY_SCOUT = "Scout"
 ENTITY_GRUNT = "Grunt"
 
+-------------------
+
 ENTITY_DOOR = "Door"
+ENTITY_SPAWNPOINT = "SpawnPoint"
+
+-------------------
+-- !TODO: c++ fix for this trash
+SEETHROUGH_ENTITY_CLASSES = {
+    "objects/.*/handrail_",
+    "objects/.*/barbwire",
+    "wire_fence",
+    "objects/.*/wirefence_gate",
+    "objects/.*/floodlight_tower%.cgf$",
+    "objects/.*/antenna_tower%.cgf$",
+}
 
 ---------------
 RunCommand = function(self, sCommand)
@@ -95,6 +112,12 @@ end
 --- Get Players
 CheckEntity = function(idEntity)
     return (GetEntity(idEntity) ~= nil)
+end
+
+---------------
+--- Get Players
+IsEntitySeethrough = function(sClass)
+    return string.matchex(sClass, unpack(SEETHROUGH_ENTITY_CLASSES))
 end
 
 ---------------

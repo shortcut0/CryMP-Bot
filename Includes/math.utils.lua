@@ -121,6 +121,26 @@ math.increase = function(hVar, iAdd)
 end
 
 ---------------------------
+-- math.positive
+
+math.positive = function(iNum)
+	if (iNum < 0) then
+		return (iNum * -1)
+	end
+	return iNum
+end
+
+---------------------------
+-- math.negative
+
+math.negative = function(iNum)
+	if (iNum > 0) then
+		return (iNum * -1)
+	end
+	return iNum
+end
+
+---------------------------
 -- math.decrease
 
 math.decrease = function(hVar, iRem)

@@ -46,7 +46,10 @@ BOT_LAST_CONNECT = nil
 BOT_LAST_AUTOCONNECT = nil
 BOT_INITIALIZED = false
 
+BOT_CURRENT_HWID = "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
+
 -----------
+-- !!TODO: c++, create new script bind for BotDLL
 BotDLL = {}
 BotDLL.MessageBox = Game.ShowMessageBox
 BotDLL.RayTraceA = Game.Bot_RayTraceCheck
@@ -55,6 +58,7 @@ BotDLL.GetPID = Game.GetGameProcessId
 BotDLL.GetCDKey = Game.GetRandomCDKey
 BotDLL.CreateDir = Game.CreateFolder
 BotDLL.CreateDirA = Game.CreateNewDirectory
+BotDLL.SetGUID = Game.SetGUID
 
 -----------
 LAST_ERROR_NAME = "N/A"
@@ -193,11 +197,11 @@ BotError = function(bQuit, bReloadFile)
 		SystemLog("$9BotLua not loaded")
 	end
 
-	SystemLog("$9%s", checkString(debug.traceback(), "<traceback failed>"))
+	SystemLog("$9%s", (debug.traceback() or "<traceback failed>"))
 	SystemLog("$9 ");
 	SystemLog("$9Date: %s", os.date())
 	SystemLog("$9Version: %s", CRYMP_BOT_VERSION)
-	SystemLog("$9Developer: %s", string.bool(BOT_DEV_MODE)) -- DANGEROUS! string.bool CAN BE NULL!!
+	SystemLog("$9Developer: %s", tostring(BOT_DEV_MODE)) -- (ok) DANGEROUS! string.bool CAN BE NULL!!
 	SystemLog("$9 ");
 	SystemLog("$9(Send this Bot.log to shortcut0 on Discord for more info)")
 	SystemLog(sStars)
@@ -260,6 +264,14 @@ BotMain.Init = function(self)
 
 	BOT_INITIALIZED = false
 	BotLog("Initializing BotMain")
+
+	-------------------
+	local sGUID = BOT_CURRENT_HWID
+	if (sGUID) then
+		BotDLL.SetGUID(sGUID)
+		BotLog("Setting Machine GUID to %s", sGUID)
+		_G["ObtainStaticID"]() -- login
+	end
 
 	-------------------
 	local iPID = BotDLL.GetPID()

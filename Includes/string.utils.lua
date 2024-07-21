@@ -33,7 +33,9 @@ BTOSTRING_ACTIVATED = 4
 BTOSTRING_YES = 5
 
 g_TS = tostring
+g_ts = tostring
 g_TN = tonumber
+g_tn = tonumber
 
 ---------------------------
 

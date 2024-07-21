@@ -65,8 +65,14 @@ AISetGlobal = GetDummyFunc()
 AIGetGlobal = GetDummyFunc()
 
 AIEvent = GetDummyFunc()
+AIEventGet = GetDummyFunc()
+
+AIEVENT_DEAD = 0xDEAD
 AIEVENT_ABORT = 0
 AIEVENT_OK = 1
+
+AIGET_OK = { AIEVENT_DEAD, AIEVENT_OK }
+AIGET_ABORT = { AIEVENT_DEAD, AIEVENT_DEAD }
 
 -------------------
 -- Init
@@ -80,6 +86,7 @@ BotAI.Init = function(self, bReload)
 	AISetGlobal = self.SetGlobal
 	AIGetGlobal = self.GetGlobal
 	AIEvent = self.CallEvent
+	AIEventGet = self.CallEvent_Get
 
 	------------
 	AILog("BotAI.Init()")
@@ -596,10 +603,22 @@ BotAI.CallSvEvent = function(sEventName, ...)
 	---------------------
 	local fEvent = aEvents[sEventName]
 	if (not isFunction(fEvent)) then
-		AILogError("Attempt to call Server event '%s' which is not a function (%s)", tostring(sEventName), type(fEvent))
+		--AILogError("Attempt to call Server event '%s' which is not a function (%s)", tostring(sEventName), type(fEvent))
 		return (0xDEAD) end
 
 	return fEvent(self.CURRENT_SV_MODULE, ...)
+end
+
+-------------------
+-- CallEvent_Get
+
+BotAI.CallEvent_Get = function(sEventName, aOks, ...)
+
+	local hRet = AIEvent(sEventName, ...)
+	if (table.lookup(aOks, hRet)) then
+		return true
+	end
+	return false
 end
 
 -------------------
