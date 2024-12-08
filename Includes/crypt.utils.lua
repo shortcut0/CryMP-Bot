@@ -85,8 +85,6 @@ crypt.DEFAULT_CRYPTING_ALGORITHM = CALG_SCA_255
 
 crypt.encrypt = function(sString, sKey, iCharSet)
 
-	local self = crypt
-
 	local sKey = checkVar(sKey, "")
 	local iCharSet = checkVar(iCharSet, crypt.DEFAULT_CRYPTING_ALGORITHM)
 
@@ -99,21 +97,22 @@ crypt.encrypt = function(sString, sKey, iCharSet)
 	local iString = string.len(sString)
 
 	---------
-	local aCharSet = self.GetCharSet(iCharSet)
+	local aCharSet = crypt.GetCharSet(iCharSet)
 	local iCharSetLen = table.count(aCharSet)
 	if (iCharSetLen < 16) then
+		BotMainLog("bad set, %d",iCharSetLen)
 		return "-1"
 	end
 	
 	---------
-	self.AssignChars(aCharSet)
+	crypt.AssignChars(aCharSet)
 
 	---------
 	local iCryptAdd = 1
 	local iCryptAdd_Extra = 1
 
 	---------
-	iCryptAdd = iCryptAdd + self.CalculateKeyValue(sKey)
+	iCryptAdd = iCryptAdd + crypt.CalculateKeyValue(sKey)
 
 	---------
 	local sChar, iBinary, iBinaryAdded, iCharIndex
@@ -428,6 +427,8 @@ end
 -- crypt.GetCharSet
 
 crypt.GetCharSet = function(iSet)
+
+	BotLog("iSet=%s(%s)",g_ts(iSet),type(iSet))
 	if (iSet == CALG_SCA_255) then
 		return crypt.aCharSets["set_255"]
 		

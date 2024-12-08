@@ -13,7 +13,9 @@ BotAI:CreateAIModule("InstantAction", {
         ENTITY_SPAWNPOINT,
         WEAPON_DSG,
         WEAPON_GAUSS,
-        WEAPON_HURRICANE
+        WEAPON_HURRICANE,
+        WEAPON_C4,
+        WEAPON_CLAYMORE
     },
 
     ------
@@ -29,9 +31,26 @@ BotAI:CreateAIModule("InstantAction", {
         end,
 
         ----------
+        GetIdleWeapon = function(self)
+
+            AILog("%s.GetIdleWeapon()", self.ModuleFullName)
+        end,
+
+        ----------
+        OnIdleWeapon = function(self, sItem)
+
+            AILog("%s.GetIdleWeapon()", self.ModuleFullName)
+        end,
+
+        ----------
         OnPathProbablyEnded = function(self)
 
             AILog("%s.OnPathProbablyEnded()", self.ModuleFullName)
+
+            local hCurr = self.CURRENT_TARGET
+            if (hCurr) then
+                hCurr.GOTO_HERE = timerinit()
+            end
             self.CURRENT_TARGET = nil
         end,
 
@@ -89,10 +108,10 @@ BotAI:CreateAIModule("InstantAction", {
         end,
 
         ----------
-        OnTargetAquired = function(self, hTarget)
+        OnTargetAcquired = function(self, hTarget)
 
             -----
-            AILog("%s.OnTargetAquired()", self.ModuleFullName)
+            AILog("%s.OnTargetAcquired()", self.ModuleFullName)
             AILog("Reset target!")
 
             -----
@@ -107,6 +126,70 @@ BotAI:CreateAIModule("InstantAction", {
 
             -- Nothing to do..
             return AIEVENT_OK
+        end,
+
+        ------
+        Inventory_CanPlaceExplosive = function(self, hExplosive)
+
+            local bAmmoBad = Bot:InventoryEmpty(hExplosive.class)
+            if (bAmmoBad) then
+                return AIEVENT_ABORT
+            end
+
+            local vPos = Bot:GetPos()
+            local bOk, hAt = self:CanPlaceExplosiveOnSpot(vPos, hExplosive.class)
+            if (not bOk) then
+                AILog("No!1")
+                return AIEVENT_ABORT -- False
+            end
+
+            local vAt = hAt:GetPos()
+            local iDistance = vector.distance(vPos, vAt)
+            local bVisible = (Bot:IsVisible_Entity(hAt))
+
+            AILog("dist=%f",iDistance)
+
+            if (iDistance > 15) then
+                AILog("No!2")
+                return AIEVENT_ABORT
+            elseif ((iDistance < 10 and bVisible) or iDistance < 5) then
+                AILog("Yes!")
+                return AIEVENT_OK
+            end
+
+            AILog("No!3")
+            return AIEVENT_ABORT
+        end,
+
+        ----------
+        OnExplosivePlaced = function(self)
+
+            -----
+            AILog("%s.OnExplosivePlaced()", self.ModuleFullName)
+
+            -- Nothing to do..
+            self:SetAvailableExplosive(nil)
+        end,
+
+        ----------
+        Inventory_FoundClaymore = function(self, hExplosive)
+
+            -----
+            AILog("%s.Inventory_FoundClaymore()", self.ModuleFullName)
+
+            -- Nothing to do..
+            self:SetAvailableExplosive(hExplosive)
+        end,
+
+        ----------
+        Inventory_FoundC4 = function(self, hExplosive)
+
+            -----
+            AILog("%s.Inventory_FoundC4()", self.ModuleFullName)
+
+            -- Nothing to do..
+            -- Save C4 for vehicles? Not in IA?
+            self:SetAvailableExplosive(hExplosive)
         end,
 
         ----------
@@ -187,6 +270,8 @@ BotAI:CreateAIModule("InstantAction", {
             return hForced
         end
 
+        local vPos = Bot:GetPos()
+
         -------------
         local aAvailable = self.DEFAULT_TARGETS
         local aEntities = GetEntities(GET_ALL, nil, function(hEntity)
@@ -208,6 +293,11 @@ BotAI:CreateAIModule("InstantAction", {
                 return false
             end
 
+            local iDist = vector.distance(vPos, hEntity:GetPos())
+            if (iDist < 25) then
+                return false
+            end
+
             return true
         end)
 
@@ -217,19 +307,100 @@ BotAI:CreateAIModule("InstantAction", {
     end,
 
     ------
+    SetAvailableExplosive = function(self, hExplosive)
+
+        local hCurrent = self:GetAvailableExplosive()
+        if (hCurrent and GetEntity(hCurrent)) then
+            return AILog("explosive already set..")
+        end
+
+        self.AVAILABLE_EXPLOSIVE = hExplosive
+    end,
+
+    ------
+    GetAvailableExplosive = function(self, hCheck)
+        if (not GetEntity(self.AVAILABLE_EXPLOSIVE)) then
+            return false
+        end
+        return (self.AVAILABLE_EXPLOSIVE)
+    end,
+
+    ------
+    CanPlaceExplosiveOnSpot = function(self, vSpot, sType, pRadius)
+
+        if (not timerexpired(Bot.EXPLOSIVE_PLANT_TIMER, 1)) then
+            return
+        end
+        if (not timerexpired(Bot.PICK_ITEM_TIMER, 3)) then
+            return
+        end
+
+        if (sType == WEAPON_C4) then
+
+        elseif (sType == WEAPON_CLAYMORE) then
+            local iLimit = checkNumber(System.GetCVar("g_claymore_limit"), 0)
+            local iPlaced = table.count(Bot:GetPlacedExplosives(sType))
+
+            if (iPlaced >= iLimit) then
+                return false, nil
+            end
+        end
+
+        local iRadius = checkNumber(pRadius, 10)
+        local aNearbySpawns = GetEntities(ENTITY_SPAWNPOINT, nil, function(a)
+            --if (not Pathfinding:IsEntityReachable(a)) then
+            --    return false
+            --end
+            return (vector.distance(a:GetPos(), vSpot) < iRadius)
+        end)
+
+        local iResult = table.count(aNearbySpawns)
+        if (iResult == 0) then
+            return false
+        end
+        local hNearby = aNearbySpawns[1]
+        Pathfinding:Effect(hNearby:GetPos(),0.1)
+        return true, hNearby
+    end,
+
+    ------
     GetAttentionPoint = function(self)
 
         -----
         AILog("%s.GetAttentionPoint()", self.ModuleFullName)
 
         -----
+        local vPos = Bot:GetPos()
+
+        -- Players
+        local bTarget = Bot:HasTarget() -- useless check? ai mods ingnored during combat
         local aTargets = self:GetNewTarget()
-        local hNewTarget
+        local hNewTarget, vTarget
+        local iTargetDistance
         if (table.count(aTargets) > 0) then
             hNewTarget = aTargets[1]
+            vTarget = hNewTarget:GetPos()
+            iTargetDistance = vector.distance(vTarget, vPos)
         end
+
+        -- Entities
         local hNewEntity = table.shuffle(self:GetNewTargetEntity())[1]
         local hCurrent = self.CURRENT_TARGET
+
+        -- Inventory check
+        local hExplosive = self:GetAvailableExplosive()
+        local bExplosiveSpot, hExplosiveSpot = self:CanPlaceExplosiveOnSpot(vPos, self.AVAILABLE_EXPLOSIVE_TYPE)
+        if (iTargetDistance) then
+            bExplosiveSpot = (bExplosiveSpot and (iTargetDistance > 35))
+        end
+
+        local bCanPlaceExplosive = false
+        if (hExplosive and self.Events.Inventory_CanPlaceExplosive(self, hExplosive) and (not bTarget and bExplosiveSpot)) then
+
+            AILog("Could place explosive!")
+            bCanPlaceExplosive = true
+            return hExplosiveSpot
+        end
 
         if (hCurrent and GetEntity(hCurrent)) then
 
@@ -240,22 +411,28 @@ BotAI:CreateAIModule("InstantAction", {
             if (bCurrentIsPlayer) then
                 bCurrentSpectating = Bot:IsSpectating(hCurrent)
             end
-
-            -----
-            if (not bCurrentIsPlayer and hNewTarget) then
-                AILog("Current is non player but found new player! switching")
-                return hNewTarget
+            local iCurrentDistance = vector.distance(hCurrent:GetPos(), vPos)
+            if (iCurrentDistance < 3 or not timerexpired(hCurrent.GOTO_HERE, 60)) then
+                hCurrent = nil
             end
 
             -----
-            if (bCurrentReachable and not bCurrentSpectating) then
-                AILog("Current target is OK!")
+            if (hCurrent) then
+                if (not bCurrentIsPlayer and hNewTarget) then
+                    AILog("Current is non player but found new player! switching")
+                    return hNewTarget
+                end
+
+                -----
+                if (bCurrentReachable and not bCurrentSpectating) then
+                    AILog("Current target is OK!")
+                    return hCurrent
+                end
+
+                -----
+                AILog("Current target not ok!")
                 return hCurrent
             end
-
-            -----
-            AILog("Current target not ok!")
-            return hCurrent
         end
 
         if (hNewTarget) then

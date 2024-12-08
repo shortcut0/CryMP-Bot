@@ -21,23 +21,38 @@ timer.new = function(expiry)
 	local timer = timer
 
 	local hNew = {}
+	hNew.created = timer.init()
 	hNew.timer = timer.init()
 	hNew.expiry = expiry
 
+	--------
 	hNew.setexpiry = function(i)
 		if (isNumber(i)) then
 			hNew.expiry = i
 		end
 	end
+	--------
 	hNew.refresh = function(i)
 		hNew.timer = timer.init()
 		hNew.expiry = checkVar(i, hNew.expiry)
 	end
+	--------
 	hNew.expired = function(i)
 		return (timer.expired(hNew.timer, checkNumber(i, hNew.expiry)))
 	end
-	hNew.diff = function(i)
+	--------
+	hNew.diff_t = function(i) -- diff since creation
+		return (timer.diff(hNew.created))
+	end
+
+	--------
+	hNew.diff = function(i) -- diff since refresh (or creation)
 		return (timer.diff(hNew.timer))
+	end
+	hNew.diff_refresh = function(i)
+		local diff = (timer.diff(hNew.timer))
+		hNew.refresh()
+		return (diff)
 	end
 
 	-----------

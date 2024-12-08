@@ -41,6 +41,7 @@ CRYMP_BOT_FORCEDCVARS = {
 -----------
 BOT_SAFE_CALLS = true -- Ignored in developer mode (???)
 BOT_DEV_MODE = true -- Developer mode
+BOT_DEBUG_MODE = true -- Debugging mode
 BOT_LUA_LOADED = false
 BOT_LAST_CONNECT = nil
 BOT_LAST_AUTOCONNECT = nil
@@ -50,7 +51,7 @@ BOT_CURRENT_HWID = "{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
 
 -----------
 -- !!TODO: c++, create new script bind for BotDLL
-BotDLL = {}
+-- !!TODO: c++, move all these from ::Game to ::BotDll
 BotDLL.MessageBox = Game.ShowMessageBox
 BotDLL.RayTraceA = Game.Bot_RayTraceCheck
 BotDLL.RayRayWorldI = Game.Bot_RayWorldIntersection
@@ -59,6 +60,17 @@ BotDLL.GetCDKey = Game.GetRandomCDKey
 BotDLL.CreateDir = Game.CreateFolder
 BotDLL.CreateDirA = Game.CreateNewDirectory
 BotDLL.SetGUID = Game.SetGUID
+
+---------------
+--- Additionals:
+---
+--- -> EntityGetRNDrawFrames(entityId)
+--- -> EntityGetBBox(entityId)
+---
+--- -> Decrypt(s, nAlgo, sKey)
+--- -> Encrypt(s, nAlgo, sKey)
+---
+--- -> AStarResolve(vStart, vEnd, aNodes)
 
 -----------
 LAST_ERROR_NAME = "N/A"
@@ -92,6 +104,10 @@ SystemLog = function(sFormat, ...)
 		System.LogAlways(sMsg)
 	end
 end
+
+-----------
+--- Links
+CryLogAlways = SystemLog
 
 -----------
 BotLog = function(sFormat, ...)
@@ -197,7 +213,7 @@ BotError = function(bQuit, bReloadFile)
 		SystemLog("$9BotLua not loaded")
 	end
 
-	SystemLog("$9%s", (debug.traceback() or "<traceback failed>"))
+	--SystemLog("$9%s", (debug.traceback() or "<traceback failed>"))
 	SystemLog("$9 ");
 	SystemLog("$9Date: %s", os.date())
 	SystemLog("$9Version: %s", CRYMP_BOT_VERSION)
@@ -231,6 +247,18 @@ System.Quit = function(sCaller, ...)
 	end
 
 	return System.OldQuit(...)
+end
+-----------
+
+if (BOT_DEBUG_MODE) then
+	os.execute_old = (os.execute_old or os.execute)
+	os.execute = function(...)
+		if (BOT_INITIALIZED) then
+			SystemLog("OS.Execute (%s)", table.concatEx({...}, ",", table.CONCAT_PREDICATE_TYPES))
+			throw_error()
+		end
+		os.execute_old(...)
+	end
 end
 
 -----------
@@ -266,6 +294,14 @@ BotMain.Init = function(self)
 	BotLog("Initializing BotMain")
 
 	-------------------
+	StopLogging = function()
+		System.SetCVar("log_verbosity -1")
+	end
+	StartLogging = function()
+		System.SetCVar("log_verbosity 0")
+	end
+
+	-------------------
 	local sGUID = BOT_CURRENT_HWID
 	if (sGUID) then
 		BotDLL.SetGUID(sGUID)
@@ -292,6 +328,11 @@ BotMain.Init = function(self)
 	-- Load Libraries
 	if (not self:LoadLibraries()) then
 		return false end
+
+	-------------------
+	if (luautils) then
+		luautils.ErrorMessageHandler = SystemLog
+	end
 
 	-------------------
 	if (not self:LoadConfigFile()) then
@@ -336,6 +377,10 @@ BotMain.Init = function(self)
 	BOT_INITIALIZED = true
 
 	-------------------
+
+	--- test
+
+
 	return true
 end
 

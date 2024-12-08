@@ -26,12 +26,18 @@ ENTITY_SPAWNPOINT = "SpawnPoint"
 -------------------
 -- !TODO: c++ fix for this trash
 SEETHROUGH_ENTITY_CLASSES = {
-    "objects/.*/handrail_",
-    "objects/.*/barbwire",
-    "wire_fence",
-    "objects/.*/wirefence_gate",
-    "objects/.*/floodlight_tower%.cgf$",
-    "objects/.*/antenna_tower%.cgf$",
+    "objects/.*/handrail_", -- always ok!
+    "objects/.*/barbwire", -- always ok!
+    "wire_fence", -- always ok!
+    "objects/.*/wirefence_gate", -- always ok!
+   -- "objects/.*/floodlight_tower%.cgf$", -- too uncertain
+   -- "objects/.*/antenna_tower%.cgf$", -- too uncertain
+}
+
+SEETHROUGH_MATERIAL_CLASSES = {
+    "mat_metal_RayProxy", -- not optimal (partially untested)
+    "mat_nodraw", -- ok
+    "mat_glass", -- good!
 }
 
 ---------------
@@ -118,6 +124,12 @@ end
 --- Get Players
 IsEntitySeethrough = function(sClass)
     return string.matchex(sClass, unpack(SEETHROUGH_ENTITY_CLASSES))
+end
+
+---------------
+--- Get Players
+IsMaterialSeethrough = function(sClass)
+    return string.matchex(sClass, unpack(SEETHROUGH_MATERIAL_CLASSES))
 end
 
 ---------------

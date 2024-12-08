@@ -94,7 +94,33 @@ end
 
 table.insertFirst = function(t, add)
 	local tNew = { add }
+	if (table.size(t) == 0) then
+		return tNew
+	end
 	for i, v in pairs(t) do
+		table.insert(tNew, v)
+	end
+	return tNew
+end
+
+---------------------------
+-- table.insertAt
+
+table.insertAt = function(t, index, add)
+	local tNew = { }
+	if (table.size(t) <= index) then
+		table.insert(t, add)
+		return (t) -- insert if index larger than t size
+	end
+	if (index == 1) then
+		return table.insertFirst(t, add)
+	end
+	local c = 0
+	for i, v in pairs(t) do
+		c = c + 1
+		if (c == index) then
+			table.insert(tNew, add)
+		end
 		table.insert(tNew, v)
 	end
 	return tNew
@@ -103,37 +129,63 @@ end
 ---------------------------
 -- table.lookup
 
-table.lookup = function(t, val)
+table.lookup = function(t, val, tf)
 	for k, v in pairs(t) do
 		if (v == val) then
-			return k end end
+			if (tf) then
+				return true
+			end
+			return k
+		end
+	end
+	if (tf) then
+		return false
+	end
 	return
 end
 
 ---------------------------
 -- table.lookupI
 
-table.lookupI = function(t, val, index)
+table.lookupI = function(t, val, index, tf)
 	for k, v in pairs(t) do
 		if (v[index] == val) then
-			return k end end
+			if (tf) then
+				return true
+			end
+			return k
+		end
+	end
+	if (tf) then
+		return false
+	end
 	return
 end
 
 ---------------------------
 -- table.lookupRec
 
-table.lookupRec = function(t, val, o)
+table.lookupRec = function(t, val, o, tf)
 	for k, v in pairs(t) do
 		if (v == val) then
+			if (tf) then
+				return true
+			end
 			return k 
 		else
 			if (table.isarray(v) and (o ~= v and o ~= _G)) then
 				local t = table.lookupRec(v, val, t)
 				if (t) then
-					return t end
+					if (tf) then
+						return true
+					end
+					return t
+				end
 			end
 		end 
+	end
+	if (tf) then
+		return false
 	end
 	return
 end
@@ -169,10 +221,55 @@ table.shallowClone = function(t)
 end
 
 ---------------------------
+-- table.shallowClone
+
+table.shallowCloneEx = function(t, pred)
+
+	local aResult = {}
+	for k, v in pairs(t or{}) do
+		aResult[k] = pred(v) end
+
+	return aResult
+end
+
+---------------------------
 -- table.copy
 
-table.copy = function(t)
-	return table.shallowClone(t)
+table.copy = table.shallowClone
+table.copyEx = table.shallowCloneEx
+
+---------------------------
+-- table.concatEx
+table.CONCAT_PREDICATE_TYPES = function(value, index, counter)
+
+	local s = ""
+	if (vector.isvector(value)) then
+		s = vector.tostring(value)
+	elseif (isArray(value)) then
+		s = string.format("Array (%s)", table.tostringEx(value))
+	else
+		s = string.format("%s (%s)", type(value), g_ts(value))
+	end
+
+	return s
+end
+table.concatEx = function(t, s, pred)
+
+	if (pred == nil) then
+		return table.concat(t, s)
+	end
+
+	local ret = ""
+	local c = 0
+	for _, v in pairs(t) do
+		if (ret ~= "") then
+			ret = ret .. s
+		end
+		c = c + 1
+		ret = ret .. pred(v, _, c)
+	end
+
+	return ret
 end
 
 ---------------------------
@@ -362,6 +459,19 @@ table.last = function(t, pred)
 end
 
 ---------------------------
+-- table.last
+
+table.lasti = function(t, pred)
+
+	local i = table.count(t)
+	local c = 0
+	for _, v in pairs(t) do
+		c = c + 1
+		if ((c >= i and pred == nil) or (isFunc(pred) and pred(v, c))) then
+			return _ end end
+end
+
+---------------------------
 -- table.count
 
 table.count = function(t, pred)
@@ -377,6 +487,15 @@ table.count = function(t, pred)
 		end
 	end
 	return iCount
+end
+
+---------------------------
+-- table.countdiff
+
+table.countdiff = function(t, t2, pred)
+	local a = table.count(t, pred)
+	local b = table.count(t2, pred)
+	return (a - b)
 end
 
 ---------------------------
@@ -822,6 +941,18 @@ table.append = function(t1, ...)
 end
 
 ---------------------------
+-- table.appendA
+
+table.appendA = function(t1, t2)
+
+	for _, t in pairs(t2) do
+		table.insert(t1, t)
+	end
+
+	return t1
+end
+
+---------------------------
 -- table.shuffle
 
 table.shuffle = function(t1)
@@ -877,7 +1008,14 @@ end
 ---------------------------
 -- table.tostring (!!MESSY!!)
 
-table.tostring = function(aArray, sTab, sName, bSubCall)
+table.tostringEx = function(aArray, sTab, sName)
+	return table.tostring(aArray, sTab, sName, false, true)
+end
+
+---------------------------
+-- table.tostring (!!MESSY!!)
+
+table.tostring = function(aArray, sTab, sName, bSubCall, bNoRecursion)
 
 	if (sTab == nil) then
 		sTab = "" end
@@ -909,13 +1047,13 @@ table.tostring = function(aArray, sTab, sName, bSubCall)
 		if (type(i) == "string") then
 			vKey = "[\"" .. tostring(i) .. "\"] = " end
 				
-		if (vType == "table") then
+		if (vType == "table" and not bNoRecursion) then
 			sRec = (table.tostring(v, sTab, "[\"" .. tostring(i) .. "\"] = ", aArray, 1))
 			if (string.empty(sRec)) then
 				bRec = true
 			else
 				sRes = sRes .. sRec
-			end	
+			end
 		elseif (vType == "number") then
 			sRes = sRes .. sTab .. vKey .. string.format("%f", v)
 		elseif (vType == "string") then

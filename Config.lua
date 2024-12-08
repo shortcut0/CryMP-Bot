@@ -27,12 +27,15 @@ Config = {
 	CurrentServer = "116.203.92.129:55001:1"; -- atoms
 	CurrentServer = "127.0.0.1:66666:2020"; -- local
 
+	CurrentServer = "94.16.110.182:64088"; -- Mistersd gungame
+	CurrentServer = "94.16.110.182:64089"; -- Mistersd Ia
+
 	CurrentServer = "94.16.110.182:64005"; -- alien
 
 	CurrentServer = "185.22.237.253:11501"; -- something
 	CurrentServer = "185.22.237.253:11502"; -- something_pro
-
-	CurrentServer = "94.16.110.182:64089"; -- Mistersd Ia
+	
+	CurrentServer = "116.203.92.129:55003:2020"; -- crymp
 
 	----------------------------------------------
 	-- if true, bot will automatically connect to servers

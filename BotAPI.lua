@@ -223,6 +223,7 @@ BotAPI.Events.OnUpdate = function(self, frameTime) -- on frame
 	pcall(SCRIPT_CHECK_RUNTIME, "FrameTick")
 
 	-----------
+	BOT_INGAME = (g_localActor ~= nil)
 	if (Config and not Config.System) then
 		return
 	end
@@ -286,13 +287,15 @@ end
 -------------------
 -- DoUpdate
 
-BotAPI.Events.OnChatMessage = function(self, hSender, hReceiver, sMessage, iType)
+BotAPI.Events.OnChatMessage = function(self, idSource, sMsg, iType)
 
 	--------
 	-- Check
 	if (not self:APIReady()) then
 		return
 	end
+
+	Bot:OnChatMessage(idSource, sMsg, iType)
 end
 
 -------------------
@@ -498,6 +501,9 @@ BotAPI.Events.OnBotDisconnect = function(self, sReason, sInfo)
 		self:SafeCall(Bot.OnBotDisconnect, Bot, g_localActor) end
 
 	-----------
+	if (Bot) then
+		Bot:RestoreCVarSync()
+	end
 	BotMain:OnDisconnect()
 	BotMain:UninstallBot(sReason, sInfo)
 end

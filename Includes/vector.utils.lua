@@ -220,6 +220,18 @@ vector.validate = function(v)
 end
 
 ---------------------------
+-- vector.withinfov
+
+vector.withinfov = function(v1, v2, v_camera, i_fov)
+
+	-- dir
+	local vDir = vector.dir(v1, v2, true) -- dir to target
+	local iDot = vector.dot(vDir, v_camera) -- dot from camera and dir to taregt
+	local iHalfFOV = math.cos(math.rad(i_fov / 2))
+
+	return (iDot >= iHalfFOV)
+end
+---------------------------
 -- vector.add
 
 vector.add = function(v1, v2)
@@ -372,6 +384,18 @@ vector.compare = function(v1, v2)
 end
 
 ---------------------------
+-- vector.isnormalized
+
+vector.isnormalized = function(v)
+
+	local iTolerance = 1e-6
+	local iLength = vector.length(v)
+	local iAbsolute =(math.abs(iLength - 1.0))
+
+	return (iAbsolute < iTolerance)
+end
+
+---------------------------
 -- vector.normalize
 
 vector.normalize = function(v)
@@ -443,19 +467,50 @@ vector.scaleInPlace = function(v, iMul, sKey)
 end
 
 ---------------------------
+-- vector.bbox
+
+vector.bbox = function()
+	return { min = vector.new(), max = vector.new() }
+end
+
+---------------------------
+-- vector.bbox_size
+
+vector.bbox_size = function(bbox)
+	local size = {}
+	local min = (bbox.min or bbox[1])
+	local max = (bbox.max or bbox[2])
+
+	size.x = (max.x - min.x)
+	size.y = (max.y - min.y)
+	size.z = (max.z - min.z)
+	return size
+end
+
+---------------------------
+-- vector.dir
+
+vector.dir = function(v1, v2, bNormalize, iScale)
+
+	-- THIS IS CORRECT !!!
+	return (vector.getdir(v2, v1, bNormalize, iScale))
+end
+
+---------------------------
 -- vector.getdir
 
 vector.getdir = function(v1, v2, bNormalize, iScale)
 
 	------------------
 	if (not vector.isvector(v1)) then
-		return v1 end
+		return throw_error("getdir(v1) is no vector") end
 		
 	------------------
 	if (not vector.isvector(v2)) then
-		return v1 end
-	
+		return throw_error("getdir(v2) is no vector") end
+
 	------------------
+	-- THIS RETURNS DIR FROM v2 TO v1, NOT the other way around!!!!
 	local vDirection = vector.sub(vector.new(v1), vector.new(v2))
 	if (bNormalize and not vector.isnull(vDirection)) then
 		vDirection = vector.normalize(vDirection) end
@@ -498,7 +553,26 @@ end
 -- vector.getang
 
 vector.length = function(v)
+	if (vector.is2dvector(v)) then
+		return vector.length2d(v)
+	elseif (vector.is1dvector(v)) then
+		return vector.length1d(v)
+	end
 	return math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+end
+
+---------------------------
+-- vector.length2d
+
+vector.length2d = function(v)
+	return math.sqrt(v.x * v.x + v.y * v.y)
+end
+
+---------------------------
+-- vector.length1d
+
+vector.length1d = function(v)
+	return math.sqrt(v.x * v.x)
 end
 
 ---------------------------
@@ -652,10 +726,12 @@ vector.distance = function(v1, v2)
 
 	------------------
 	if (not vector.isvector(v1)) then
+		throw_error(".distance(v1) is no vector")
 		return 0 end
 
 	------------------
 	if (not vector.isvector(v2)) then
+		throw_error(".distance(v2) is no vector")
 		return 0 end
 	
 	------------------
@@ -692,48 +768,21 @@ end
 -- vector.left
 
 vector.left = function(v)
-	local iX = v.x
-	local iY = v.y
-	local iZ = v.z
-
-	-----
-	iX = -iY
-	iY = iX
-
-	-----
-	return { x = iX, y = iY, z = iZ }
+	return { x = v.y, y = -v.x, z = v.z }
 end
 
 ---------------------------
 -- vector.right
 
 vector.right = function(v)
-	local iX = v.x
-	local iY = v.y
-	local iZ = v.z
-
-	-----
-	iX = iY
-	iY = -iX
-
-	-----
-	return { x = iX, y = iY, z = iZ }
+	return { x = -v.y, y = v.x, z = v.z }
 end
 
 ---------------------------
 -- vector.reverse
 
 vector.reverse = function(v)
-	local iX = v.x
-	local iY = v.y
-	local iZ = v.z
-
-	-----
-	iX = -iX
-	iY = -iY
-
-	-----
-	return { x = iX, y = iY, z = iZ }
+	return { x = -v.x, y = -v.y, z = v.z }
 end
 
 ---------------------------

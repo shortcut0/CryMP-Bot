@@ -1,4 +1,4 @@
-BotAI:CreateServerModule(SERVER_ADDR_ALIEN, SERVER_PORT_ANY, {
+BotAI:CreateServerModule(SERVER_ADDR_ALIEN, SERVER_PORT_ALIEN, {
 
     ----------
     TEMP = {},

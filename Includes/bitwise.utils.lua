@@ -132,6 +132,19 @@ bit.Next = function(x)
 	return (x * 2)
 end
 
+---------------------------
+-- bit.Next
+
+bit.GetAll = function(x, get)
+	local a = {}
+	for _, f in pairs(get) do
+		if (BitOR(x, f) > 0) then
+			table.insert(a, f)
+		end
+	end
+	return table.concat(a, ",")
+end
+
 -------------------
 BitXOR = bit.XOR
 BitOR = bit.OR
@@ -140,6 +153,7 @@ BitAND = bit.AND
 BitShift = bit.RightShift
 BitLeftShift = bit.LeftShift
 BitNext = bit.Next
+BitGetAll = bit.GetAll
 
 -------------------
 return bit

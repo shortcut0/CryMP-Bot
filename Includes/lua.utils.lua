@@ -13,6 +13,27 @@ luautils = {
 }
 
 ---------------------------
+-- luautils.throw_error
+
+luautils.throw_error = function(sMessage)
+
+
+	local sMsg = string.format("Error Thrown (%s)\n\t%s", tostring(sMessage), tostring(tracebackEx()))
+	local fMsg = (luautils.ErrorMessageHandler)
+	if (fMsg) then
+		--fMsg(sMsg)
+	end
+
+	error(sMsg)
+
+	--local i = 0
+	--while ((_G["nothing_" .. i]) ~= nil) do
+	--	i = i + 1
+	--end
+	--_G["nothing_" .. i]()
+end
+
+---------------------------
 -- luautils.isFunction
 
 luautils.isFunction = function(hParam)
@@ -349,11 +370,11 @@ end
 -- Args
 --  1. sMessage <a message to append to the final traceback ("L:MESSAGE" to append it to the end of each line)>
 
-luautils.tracebackex = function(sMessage, iLevel)
+luautils.tracebackex = function(sMessage, iLevel, sPrefix)
 
 	local bAppendLine = (string.matchex(sMessage, "^L:(.*)$") ~= nil)
     local iLevel = checkNumber(iLevel, 1)
-    local sTrace = "stack traceback:"
+    local sTrace = (sPrefix or "stack traceback:")
     while (true) do
         local aInfo = debug.getinfo(iLevel, "Sln")
         if (not aInfo) then break end
@@ -372,10 +393,28 @@ end
 ---------------------------
 -- luautils.getDummyFunc
 
-luautils.getDummyFunc = function()
+luautils.getDummyFunc = function(throw)
 
 	-------------
 	return function()
+		if (throw) then
+			throw_error("dummy function called!!")
+		end
+	end
+
+end
+
+---------------------------
+-- luautils.getDummyFunc
+
+luautils.getErrorDummy = function()
+
+	-------------
+	return function(...)
+		throw_error(string.format(
+				"Dummy Called (Arguments: %s)",
+				table.concatEx({ ... }, ", ", table.CONCAT_PREDICATE_TYPES)
+		))
 	end
 
 end
@@ -646,10 +685,12 @@ checkGlobal = luautils.checkGlobal
 checkString = luautils.checkString
 compNumber = luautils.compNumber
 GetDummyFunc = luautils.getDummyFunc
+GetErrorDummy = luautils.getErrorDummy
 repeatArg = luautils.repeatargument
 switch = luautils.switch
 traceback = luautils.traceback
 tracebackEx = luautils.tracebackex
+throw_error = luautils.throw_error
 
 -------------------
 return luautils

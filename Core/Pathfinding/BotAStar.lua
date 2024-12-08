@@ -82,7 +82,8 @@ function neighbor_nodes (theNode, nodes)
 	local aNeighbors = {}
 	for _, node in ipairs(nodes) do
 		if (theNode ~= node and is_valid_node(theNode, node)) then
-			table.insert (aNeighbors, node) end
+			table.insert (aNeighbors, node)
+		end
 	end
 	return aNeighbors
 end
@@ -113,8 +114,9 @@ end
 --------------------------------
 -- unwind_path
 function unwind_path (flat_path, map, current_node)
+
 	if (map[current_node]) then
-		table.insert(flat_path, 1, map [ current_node ]) 
+		table.insert(flat_path, 1, map [ current_node ])
 		return unwind_path(flat_path, map, map [ current_node ])
 	else
 		return flat_path
@@ -126,6 +128,9 @@ end
 ----------------------------------------------------------------
 
 function a_star ( start, goal, nodes, valid_node_func )
+
+	----------------------
+	local bDebug = (ASTAR_DEBUG > 0)
 
 	----------------------
 	local aClosedSet = {}
@@ -147,8 +152,13 @@ function a_star ( start, goal, nodes, valid_node_func )
 		----------------------
 		local current = lowest_f_score(aOpenSet, f_score)
 		if (current == goal) then
+
 			local path = unwind_path ({}, aCameFrom, goal)
 			table.insert(path, goal)
+
+			if (bDebug) then
+				SystemLog("Path found. Path length: %d", table.size(path))
+			end
 			return path
 		end
 
@@ -158,6 +168,10 @@ function a_star ( start, goal, nodes, valid_node_func )
 		
 		----------------------
 		local neighbors = neighbor_nodes ( current, nodes )
+		if (bDebug) then
+			SystemLog("Current node ID: %d, Neighbors count: %d", current.id, table.size(neighbors))
+		end
+
 		for _, neighbor in ipairs ( neighbors ) do 
 			if (not_in (aClosedSet, neighbor)) then
 			
@@ -167,12 +181,24 @@ function a_star ( start, goal, nodes, valid_node_func )
 				----------------------
 				if (not_in(aOpenSet, neighbor) or tentative_g_score < g_score [neighbor]) then 
 					aCameFrom 	[neighbor] = current
+
 					g_score 	[neighbor] = tentative_g_score
 					f_score 	[neighbor] = g_score [ neighbor ] + heuristic_cost_estimate ( neighbor, goal )
-					
+
+
+					if (bDebug) then
+						SystemLog("Updating node: current node ID: %d, neighbor node ID: %d, g_score: %f, f_score: %f", current.id, neighbor.id, g_score[neighbor], f_score[neighbor])
+						SystemLog("came_from size = %d", table.size(aCameFrom))
+
+					end
+
 					----------------------
 					if (not_in (aOpenSet, neighbor)) then
 						table.insert(aOpenSet, neighbor)
+
+						if (bDebug) then
+							CryLogAlways("Neighbor node ID: %d added to open set", neighbor.id)
+						end
 					end
 				end
 			end
